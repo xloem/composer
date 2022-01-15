@@ -1,10 +1,11 @@
 # Copyright 2021 MosaicML. All Rights Reserved.
 
+import os
 from dataclasses import dataclass
 
 import yahp as hp
 from torchvision import transforms
-from torchvision.datasets import CIFAR10
+from torchvision.datasets import ImageFolder
 
 from composer.core.types import DataLoader
 from composer.datasets.dataloader import DataloaderHparams
@@ -47,18 +48,15 @@ class CIFAR10DatasetHparams(DatasetHparams, SyntheticHparamsMixin):
                     transforms.ToTensor(),
                     transforms.Normalize(mean=cifar10_mean, std=cifar10_std),
                 ])
+                split = "train"
             else:
                 transformation = transforms.Compose([
                     transforms.ToTensor(),
                     transforms.Normalize(mean=cifar10_mean, std=cifar10_std),
                 ])
+                split = "test"
 
-            dataset = CIFAR10(
-                self.datadir,
-                train=self.is_train,
-                download=self.download,
-                transform=transformation,
-            )
+            dataset = ImageFolder(os.path.join(self.datadir, split), transformation)
         sampler = dist.get_sampler(dataset, drop_last=self.drop_last, shuffle=self.shuffle)
 
         return dataloader_hparams.initialize_object(dataset,
