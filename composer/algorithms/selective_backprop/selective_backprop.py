@@ -146,7 +146,7 @@ def selective_backprop(X: torch.Tensor,
 class SelectiveBackpropHparams(AlgorithmHparams):
     """See :class:`SelectiveBackprop`"""
 
-    start: float = hp.optional(doc="SB interval start, as fraction of training duration", template_default=0.5)
+    start: float = hp.optional(doc="SB interval start, as fraction of training duration", default=0.5)
     end: float = hp.optional(doc="SB interval end, as fraction of training duration", default=0.9)
     keep: float = hp.optional(doc="fraction of minibatch to select and keep for gradient computation", default=0.5)
     scale_factor: float = hp.optional(doc="scale for downsampling input for selection forward pass", default=0.5)
