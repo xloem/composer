@@ -1,0 +1,4 @@
+save_checkpoint:
+  folder: checkpoint_test
+  interval: 1
+  interval_unit: ep

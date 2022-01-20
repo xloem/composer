@@ -26,6 +26,7 @@ from composer.trainer.devices.device import Device
 from composer.utils import ObjectStoreProviderHparams, dist, iterate_with_pbar, reproducibility, run_directory
 
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
 if TYPE_CHECKING:
     import deepspeed

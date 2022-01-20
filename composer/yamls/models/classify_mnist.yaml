@@ -43,3 +43,9 @@ dataloader:
 validate_every_n_epochs: 1
 grad_accum: 1
 precision: amp
+save_checkpoint:
+  folder: checkpoint_test_2
+  interval: 1
+  interval_unit: ep
+load_checkpoint:
+  checkpoint: /mnt/gcp/matthew/composer/checkpoint_test/mosaic_states.pt

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import abc
-from typing import Any, Optional, Tuple
+import textwrap
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 import torch
 from torch import Tensor
@@ -107,7 +108,16 @@ class MosaicClassifier(BaseMosaicModel):
             self.num_classes = getattr(self.module, "num_classes")
 
     def loss(self, outputs: Any, batch: BatchPair, *args, **kwargs) -> Tensors:
-        _, y = batch
+        if isinstance(batch, Sequence):
+            _, y = batch
+        elif isinstance(batch, Dict):
+            y = batch["target"]
+        else:
+            raise NotImplementedError(
+                textwrap.dedent(f"""Cannot extract targets from `batch`. `batch` must
+                                 either be a tuple/list (i.e. targets = batch[1]) or a
+                                 dict (i.e. targets = batch['labels'])"""))
+
         assert isinstance(outputs, Tensor), "Loss expects outputs as Tensor"
         assert isinstance(y, Tensor), "Loss does not support multiple target Tensors"
         return soft_cross_entropy(outputs, y, *args, **kwargs)
@@ -115,14 +125,31 @@ class MosaicClassifier(BaseMosaicModel):
     def metrics(self, train: bool = False) -> Metrics:
         return self.train_acc if train else MetricCollection([self.val_acc, self.val_loss])
 
-    def forward(self, batch: BatchPair) -> Tensor:
-        x, _ = batch
+    def forward(self, batch: Batch) -> Tensor:
+        if isinstance(batch, Sequence):
+            x, _ = batch
+        elif isinstance(batch, Dict):
+            x = batch["data"]
+        else:
+            raise NotImplementedError(
+                textwrap.dedent(f"""Cannot extract data from `batch`. `batch` must either
+                                 be a tuple/list (i.e. data = batch[0]) or a dict (i.e.
+                                 data = batch['data'])"""))
         logits = self.module(x)
 
         return logits
 
-    def validate(self, batch: BatchPair) -> Tuple[Any, Any]:
+    def validate(self, batch: Batch) -> Tuple[Any, Any]:
         assert self.training is False, "For validation, model must be in eval mode"
-        _, targets = batch
+        if isinstance(batch, Sequence):
+            _, targets = batch
+        elif isinstance(batch, Dict):
+            targets = batch["target"]
+        else:
+            raise NotImplementedError(
+                textwrap.dedent(f"""Cannot extract targets from `batch`. `batch` must
+                                 either be a tuple/list (i.e. targets = batch[1]) or a
+                                 dict (i.e. targets = batch['labels'])"""))
+
         logits = self.forward(batch)
         return logits, targets

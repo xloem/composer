@@ -39,6 +39,7 @@ from composer.trainer.trainer_hparams import TrainerHparams
 from composer.utils import dist, ensure_tuple, map_collection, reproducibility
 
 log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
 
 class Trainer:
@@ -575,7 +576,6 @@ class Trainer:
                                 # data and if so print a warning that metrics may return unexpected results
                                 outputs, targets = self.original_model.validate(eval_microbatch)
                                 train_metrics.update(outputs, targets)
-
                     state.model.train()
 
                     self.engine.run_event(Event.AFTER_DATALOADER)

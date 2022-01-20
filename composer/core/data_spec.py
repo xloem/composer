@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import collections.abc
 import textwrap
-from typing import TYPE_CHECKING, Callable, List, Optional, Sequence
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Sequence, Union
 
 import torch
 
@@ -80,18 +80,38 @@ class DataSpec:
     def _default_device_transforms(self, batch: Batch):
         return batch
 
-    def _default_split_batch(self, batch: Batch, num_microbatches: int) -> Sequence[Batch]:
-        if not isinstance(batch, Sequence):
-            raise ValueError(f'split_fn requires batch be a tuple pair of tensors, got {type(batch)}')
-        x, y = batch
-        if isinstance(x, torch.Tensor) and isinstance(y, torch.Tensor):
-            return list(zip(x.chunk(num_microbatches), y.chunk(num_microbatches)))
-        if isinstance(x, List) and isinstance(y, List):
-            return list(
-                zip(
-                    [x[i::num_microbatches] for i in range(num_microbatches)],
-                    [y[i::num_microbatches] for i in range(num_microbatches)],
-                ))
+    def _default_split_batch(self, batch: Batch, num_microbatches: int) -> Union[Sequence[Batch], Batch]:
+        if not isinstance(batch, (Sequence, Dict)):
+            raise ValueError(f'split_fn requires batch be a tuple pair of tensors or dict, got {type(batch)}')
+        if isinstance(batch, Sequence):
+            # # Flexible microbatching for arbitrarily long tuples, but Batch_Pair disallows this
+            # microbatched = []
+            # for b in batch:
+            #     if isinstance(b, torch.Tensor):
+            #         microbatched.append(b.chunk(num_microbatches))
+            #     if isinstance(b, List):
+            #         microbatched.append([b[i::num_microbatches] for i in range(num_microbatches)])
+            # return list(zip(microbatched))
+            x, y = batch
+            if isinstance(x, torch.Tensor) and isinstance(y, torch.Tensor):
+                return list(zip(x.chunk(num_microbatches), y.chunk(num_microbatches)))
+            if isinstance(x, List) and isinstance(y, List):
+                return list(
+                    zip(
+                        [x[i::num_microbatches] for i in range(num_microbatches)],
+                        [y[i::num_microbatches] for i in range(num_microbatches)],
+                    ))
+        if isinstance(batch, Dict):
+            microbatched = [{} for _ in range(num_microbatches)]
+            for k, v in batch.items():
+                if isinstance(v, torch.Tensor):
+                    for data_microbatch, microbatch_dict in zip(v.chunk(num_microbatches), microbatched):
+                        microbatch_dict[k] = data_microbatch
+                if isinstance(v, List):
+                    for i in range(num_microbatches):
+                        microbatched[i][k] = v[i::num_microbatches]
+            return microbatched
+
         raise NotImplementedError(
             textwrap.dedent("""The default split_fn is unable to split the output of this
                 dataloader. Please use a DataSpec and specify `split_batch`."""))

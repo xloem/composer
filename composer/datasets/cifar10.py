@@ -10,6 +10,7 @@ from torchvision.datasets import ImageFolder
 from composer.core.types import DataLoader
 from composer.datasets.dataloader import DataloaderHparams
 from composer.datasets.hparams import DatasetHparams, SyntheticHparamsMixin
+from composer.datasets.multilabel_image_folder import MultilabelImageFolder
 from composer.datasets.synthetic import SyntheticBatchPairDataset
 from composer.utils import dist
 
@@ -56,7 +57,9 @@ class CIFAR10DatasetHparams(DatasetHparams, SyntheticHparamsMixin):
                 ])
                 split = "test"
 
-            dataset = ImageFolder(os.path.join(self.datadir, split), transformation)
+            dataset = MultilabelImageFolder(os.path.join(self.datadir, split),
+                                            transformation,
+                                            supp_label_path='/mnt/gcp/matthew/supp_label_test/supp_label_random.csv')
         sampler = dist.get_sampler(dataset, drop_last=self.drop_last, shuffle=self.shuffle)
 
         return dataloader_hparams.initialize_object(dataset,
