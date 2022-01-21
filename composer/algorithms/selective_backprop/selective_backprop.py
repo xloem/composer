@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import ast
+import csv
 import inspect
+import logging
 from dataclasses import asdict, dataclass
-from typing import Callable, Dict, Optional, Sequence, Tuple, Union
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import torch
@@ -13,6 +16,9 @@ from torch.nn import functional as F
 
 from composer.algorithms.algorithm_hparams import AlgorithmHparams
 from composer.core.types import Algorithm, Event, Logger, State, Tensor
+
+log = logging.getLogger(__name__)
+log.setLevel(logging.INFO)
 
 
 def do_selective_backprop(
@@ -217,9 +223,13 @@ class SelectiveBackprop(Algorithm):
         return is_chosen
 
     def apply(self, event: Event, state: State, logger: Optional[Logger] = None) -> None:
-        if event == Event.INIT:
-            """Parse .csv of sample scores and to dataset"""
-            event
+        if event == Event.INIT and self.hparams.score_path:
+            # Parse sample score .csv
+            sample_score_dict = self.parse_score_csv()
+            assert hasattr(state.train_dataloader.dataset, "samples"), "Dataset must have attribute 'samples'"
+            # Add sample scores to samples in dataset
+            state.train_dataloader.dataset.samples = self.append_scores_to_samples(
+                sample_score_dict, state.train_dataloader.dataset.samples)
 
         if event == Event.AFTER_DATALOADER:
             """Apply selective backprop to the current batch."""
@@ -250,3 +260,59 @@ class SelectiveBackprop(Algorithm):
                     self.hparams.keep,
                     self.hparams.scale_factor)
             state.batch = (new_input, new_target)
+
+    def parse_score_csv(self) -> Dict:
+        """Parse .csv into a dict in which each item corresponds to a row, and each row
+        is encoded as a dict. The data structure takes the following form:
+        {
+        sample0_path: {label0: value0, label1: value1, ...},
+        sample1_path: {label0: value0, label1: value1, ...},
+        ...
+        sampleN_path: {label0: value0, label1: value1, ...}
+        }"""
+        parsed_rows = {}
+        if self.hparams.score_path:
+            try:
+                with open(self.hparams.score_path, newline='') as csvfile:
+                    reader = csv.DictReader(csvfile)
+                    for row_n, row in enumerate(reader, start=1):
+                        sample_path = None
+                        for k, v in row.items():
+                            # Default values
+                            parsed_val = float("nan")
+                            if k == "path":
+                                parsed_rows[v] = {}
+                                sample_path = v
+                            else:
+                                try:
+                                    parsed_val = ast.literal_eval(v)
+                                except ValueError:
+                                    log.warning(
+                                        f"Unable to parse column value {v} from row {row_n} in sample score file {self.hparams.score_path}. Strings must be 'quoted' to be parsed correctly."
+                                    )
+                                try:
+                                    parsed_rows[sample_path][k] = parsed_val
+                                except KeyError:
+                                    log.warning(
+                                        f"Unable to parse sample path from row {row_n} in sample score file {self.hparams.score_path}. Please ensure the first column is labeled 'path'."
+                                    )
+            except FileNotFoundError:
+                log.error(f"Sample score file {self.hparams.score_path} not found.")
+        return parsed_rows
+
+    def append_scores_to_samples(self, score_dict: Dict, samples: Union[Sequence, Dict]) -> List[Dict]:
+        """Takes dict of sample scores and adds them to each data sample in the dataset."""
+        sample_dicts = []
+        n_failed_supp_labels = 0
+        for sample in samples:
+            curr_sample_dict = {k: v for k, v in sample.items()}
+            try:
+                curr_row = score_dict[sample["path"]]
+                for k, v in curr_row.items():
+                    curr_sample_dict[k] = v
+            except KeyError:
+                n_failed_supp_labels += 1
+            sample_dicts.append(curr_sample_dict)
+        if n_failed_supp_labels > 0:
+            log.warning(f"Unable to add one or more supplementary labels to {n_failed_supp_labels} samples.")
+        return sample_dicts

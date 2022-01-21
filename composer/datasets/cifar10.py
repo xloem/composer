@@ -5,12 +5,11 @@ from dataclasses import dataclass
 
 import yahp as hp
 from torchvision import transforms
-from torchvision.datasets import ImageFolder
 
 from composer.core.types import DataLoader
 from composer.datasets.dataloader import DataloaderHparams
 from composer.datasets.hparams import DatasetHparams, SyntheticHparamsMixin
-from composer.datasets.multilabel_image_folder import MultilabelImageFolder
+from composer.datasets.image_folder_dict_samples import ImageFolderDictSamples
 from composer.datasets.synthetic import SyntheticBatchPairDataset
 from composer.utils import dist
 
@@ -57,9 +56,9 @@ class CIFAR10DatasetHparams(DatasetHparams, SyntheticHparamsMixin):
                 ])
                 split = "test"
 
-            dataset = MultilabelImageFolder(os.path.join(self.datadir, split),
-                                            transformation,
-                                            supp_label_path='/mnt/gcp/matthew/supp_label_testing/cifar10_train.csv')
+            dataset = ImageFolderDictSamples(os.path.join(self.datadir, split),
+                                             transformation,
+                                             supp_label_path='/mnt/gcp/matthew/supp_label_testing/cifar10_train.csv')
         sampler = dist.get_sampler(dataset, drop_last=self.drop_last, shuffle=self.shuffle)
 
         return dataloader_hparams.initialize_object(dataset,
