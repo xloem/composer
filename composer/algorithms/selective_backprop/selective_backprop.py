@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import asdict, dataclass
-from typing import Callable, Dict, Optional, Sequence, Tuple
+from typing import Callable, Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import torch
@@ -149,8 +149,9 @@ class SelectiveBackpropHparams(AlgorithmHparams):
     start: float = hp.optional(doc="SB interval start, as fraction of training duration", default=0.5)
     end: float = hp.optional(doc="SB interval end, as fraction of training duration", default=0.9)
     keep: float = hp.optional(doc="fraction of minibatch to select and keep for gradient computation", default=0.5)
-    scale_factor: float = hp.optional(doc="scale for downsampling input for selection forward pass", default=0.5)
+    scale_factor: float = hp.optional(doc="scale for downsampling input for selection forward pass", default=1)
     interrupt: int = hp.optional(doc="interrupt SB with a vanilla minibatch step every 'interrupt' batches", default=2)
+    score_path: Union[str, None] = hp.optional(doc="path to .csv containing sample scores", default=None)
 
     def initialize_object(self) -> SelectiveBackprop:
         return SelectiveBackprop(**asdict(self))
@@ -183,16 +184,21 @@ class SelectiveBackprop(Algorithm):
             ``interrupt`` batches
     """
 
-    def __init__(self, start: float, end: float, keep: float, scale_factor: float, interrupt: int):
+    def __init__(self, start: float, end: float, keep: float, scale_factor: float, interrupt: int,
+                 score_path: Optional[None]):
         self.hparams = SelectiveBackpropHparams(start=start,
                                                 end=end,
                                                 keep=keep,
                                                 scale_factor=scale_factor,
-                                                interrupt=interrupt)
+                                                interrupt=interrupt,
+                                                score_path=score_path)
 
     def match(self, event: Event, state: State) -> bool:
-        """Match on ``Event.AFTER_DATALOADER`` if time is between ``self.start`` and
-        ``self.end``."""
+        """Match on Event.INIT or ``Event.AFTER_DATALOADER`` if time is between
+        ``self.start`` and ``self.end``."""
+        if event == Event.INIT and self.hparams.score_path:
+            return True
+
         is_event = (event == Event.AFTER_DATALOADER)
         if not is_event:
             return False
@@ -211,31 +217,36 @@ class SelectiveBackprop(Algorithm):
         return is_chosen
 
     def apply(self, event: Event, state: State, logger: Optional[Logger] = None) -> None:
-        """Apply selective backprop to the current batch."""
-        if isinstance(state.batch, Sequence):
-            input, target = state.batch_pair
-        elif isinstance(state.batch, Dict):
-            input = state.batch["data"]
-            target = state.batch["target"]
-        else:
-            raise TypeError(f"state.batch must be a Sequence or Dict")
-        assert isinstance(input, Tensor) and isinstance(target, Tensor), \
-            "Multiple tensors not supported for this method yet."
+        if event == Event.INIT:
+            """Parse .csv of sample scores and to dataset"""
+            event
 
-        assert callable(state.model.module.loss)  # type: ignore - type not found
+        if event == Event.AFTER_DATALOADER:
+            """Apply selective backprop to the current batch."""
+            if isinstance(state.batch, Sequence):
+                input, target = state.batch_pair
+            elif isinstance(state.batch, Dict):
+                input = state.batch["data"]
+                target = state.batch["target"]
+            else:
+                raise TypeError(f"state.batch must be a Sequence or Dict")
+            assert isinstance(input, Tensor) and isinstance(target, Tensor), \
+                "Multiple tensors not supported for this method yet."
 
-        # Model expected to only take in input, not the full batch
-        model = lambda X: state.model((X, None))
+            assert callable(state.model.module.loss)  # type: ignore - type not found
 
-        def loss(p, y, reduction="none"):
-            return state.model.module.loss(p, (None, y), reduction=reduction)  # type: ignore
+            # Model expected to only take in input, not the full batch
+            model = lambda X: state.model((X, None))
 
-        with state.precision_context:
-            new_input, new_target = selective_backprop(
-                input,
-                target,
-                model,  # type: ignore - ditto because of loss
-                loss,
-                self.hparams.keep,
-                self.hparams.scale_factor)
-        state.batch = (new_input, new_target)
+            def loss(p, y, reduction="none"):
+                return state.model.module.loss(p, (None, y), reduction=reduction)  # type: ignore
+
+            with state.precision_context:
+                new_input, new_target = selective_backprop(
+                    input,
+                    target,
+                    model,  # type: ignore - ditto because of loss
+                    loss,
+                    self.hparams.keep,
+                    self.hparams.scale_factor)
+            state.batch = (new_input, new_target)
