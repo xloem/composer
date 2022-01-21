@@ -59,7 +59,7 @@ class CIFAR10DatasetHparams(DatasetHparams, SyntheticHparamsMixin):
 
             dataset = MultilabelImageFolder(os.path.join(self.datadir, split),
                                             transformation,
-                                            supp_label_path='/mnt/gcp/matthew/supp_label_test/supp_label_random.csv')
+                                            supp_label_path='/mnt/gcp/matthew/supp_label_testing/cifar10_train.csv')
         sampler = dist.get_sampler(dataset, drop_last=self.drop_last, shuffle=self.shuffle)
 
         return dataloader_hparams.initialize_object(dataset,

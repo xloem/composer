@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import asdict, dataclass
-from typing import Callable, Optional, Tuple
+from typing import Callable, Dict, Optional, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -212,7 +212,13 @@ class SelectiveBackprop(Algorithm):
 
     def apply(self, event: Event, state: State, logger: Optional[Logger] = None) -> None:
         """Apply selective backprop to the current batch."""
-        input, target = state.batch_pair
+        if isinstance(state.batch, Sequence):
+            input, target = state.batch_pair
+        elif isinstance(state.batch, Dict):
+            input = state.batch["data"]
+            target = state.batch["target"]
+        else:
+            raise TypeError(f"state.batch must be a Sequence or Dict")
         assert isinstance(input, Tensor) and isinstance(target, Tensor), \
             "Multiple tensors not supported for this method yet."
 

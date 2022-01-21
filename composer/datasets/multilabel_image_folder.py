@@ -68,6 +68,7 @@ class MultilabelImageFolder(ImageFolder):
                                                     loader=loader,
                                                     is_valid_file=is_valid_file)
 
+        parsed_rows = {}
         if not isinstance(supp_label_path, type(None)):
             # Parse .csv into a dict in which each item corresponds to a row, and each row
             # is encoded as a dict. The data structure takes the following form:
@@ -77,7 +78,6 @@ class MultilabelImageFolder(ImageFolder):
             # ...
             # sampleN_path: {label0: value0, label1: value1, ...}
             # }
-            parsed_rows = {}
             try:
                 with open(supp_label_path, newline='') as csvfile:
                     reader = csv.DictReader(csvfile)
@@ -107,23 +107,24 @@ class MultilabelImageFolder(ImageFolder):
             except FileNotFoundError:
                 log.error(f"Supplementary label file {supp_label_path} not found.")
 
-            # Turn self.samples from list of tuples into list of dicts and add
-            # supplementary labels.
-            sample_dicts = []
-            n_failed_supp_labels = 0
-            for sample in self.samples:
-                sample_path, target = sample
-                curr_sample_dict = {"path": sample_path, "target": target}
+        # Turn self.samples from list of tuples into list of dicts and add
+        # supplementary labels.
+        sample_dicts = []
+        n_failed_supp_labels = 0
+        for sample in self.samples:
+            sample_path, target = sample
+            curr_sample_dict = {"path": sample_path, "target": target}
+            if parsed_rows:
                 try:
                     curr_row = parsed_rows[sample_path]
                     for k, v in curr_row.items():
                         curr_sample_dict[k] = v
                 except KeyError:
                     n_failed_supp_labels += 1
-                sample_dicts.append(curr_sample_dict)
-            self.samples = sample_dicts
-            if n_failed_supp_labels > 0:
-                log.warning(f"Unable to add one or more supplementary labels to {n_failed_supp_labels} samples.")
+            sample_dicts.append(curr_sample_dict)
+        self.samples = sample_dicts
+        if n_failed_supp_labels > 0:
+            log.warning(f"Unable to add one or more supplementary labels to {n_failed_supp_labels} samples.")
 
     def __getitem__(self, index: int) -> Dict:
         """
