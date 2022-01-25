@@ -15,7 +15,7 @@ import yahp as hp
 from torch.nn import functional as F
 
 from composer.algorithms.algorithm_hparams import AlgorithmHparams
-from composer.core.types import Algorithm, Event, Logger, State, Tensor
+from composer.core.types import Algorithm, Batch, Event, Logger, State, Tensor
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -56,10 +56,12 @@ def do_selective_backprop(
 
 
 # TODO this function should probably be part of the public API
-def selective_backprop(X: torch.Tensor,
-                       y: torch.Tensor,
+def selective_backprop(batch: Union[Batch, Dict[str, Tensor], None] = None,
+                       X: Union[torch.Tensor, None] = None,
+                       y: Union[torch.Tensor, None] = None,
+                       *,
                        model: torch.nn.Module,
-                       loss_fun: Callable,
+                       scoring_fxn: Callable,
                        keep: float,
                        scale_factor: float = 1) -> Tuple[torch.Tensor, torch.Tensor]:
     """Select a subset of the batch on which to learn as per (`Jiang et al. 2019 <https://arxiv.org/abs/1910.00762>`_)
@@ -78,7 +80,7 @@ def selective_backprop(X: torch.Tensor,
         X: Input tensor to prune
         y: Output tensor to prune
         model: Model with which to predict outputs
-        loss_fun: Loss function of the form ``loss(outputs, targets, reduction='none')``.
+        scoring_fxn: Loss function of the form ``loss(outputs, targets, reduction='none')``.
             The function must take the keyword argument ``reduction='none'``
             to ensure that per-sample losses are returned.
         keep: Fraction of examples in the batch to keep
@@ -105,6 +107,17 @@ def selective_backprop(X: torch.Tensor,
     """
     INTERPOLATE_MODES = {3: "linear", 4: "bilinear", 5: "trilinear"}
 
+    if batch:
+        if not isinstance(batch, Dict):
+            raise TypeError("Argument 'batch' must be a dict")
+        if "data" not in batch.keys() or "target" not in batch.keys():
+            raise ValueError("Argument 'batch' must be a dict that contains keys 'data' and 'target'.")
+        X = batch["data"]
+        y = batch["target"]
+
+    assert isinstance(X, Tensor)
+    assert isinstance(y, Tensor)
+
     interp_mode = "bilinear"
     if scale_factor != 1:
         if X.dim() not in INTERPOLATE_MODES:
@@ -114,11 +127,7 @@ def selective_backprop(X: torch.Tensor,
     if scale_factor > 1:
         raise ValueError("scale_factor must be <= 1")
 
-    if callable(loss_fun):
-        sig = inspect.signature(loss_fun)
-        if not "reduction" in sig.parameters:
-            raise TypeError("Loss function `loss_fun` must take a keyword argument `reduction`.")
-    else:
+    if not callable(scoring_fxn):
         raise TypeError("Loss function must be callable")
 
     with torch.no_grad():
@@ -132,7 +141,7 @@ def selective_backprop(X: torch.Tensor,
 
         # Get per-examples losses
         out = model(X_scaled)
-        losses = loss_fun(out, y, reduction="none")
+        losses = scoring_fxn(out, y)
 
         # Sort losses
         sorted_idx = torch.argsort(losses)
@@ -155,8 +164,12 @@ class SelectiveBackpropHparams(AlgorithmHparams):
     start: float = hp.optional(doc="SB interval start, as fraction of training duration", default=0.5)
     end: float = hp.optional(doc="SB interval end, as fraction of training duration", default=0.9)
     keep: float = hp.optional(doc="fraction of minibatch to select and keep for gradient computation", default=0.5)
-    scale_factor: float = hp.optional(doc="scale for downsampling input for selection forward pass", default=1)
+    scale_factor: float = hp.optional(doc="scale for downsampling input for selection forward pass", default=0.5)
     interrupt: int = hp.optional(doc="interrupt SB with a vanilla minibatch step every 'interrupt' batches", default=2)
+    scoring_fxn: str = hp.optional(
+        doc=
+        "Scoring function that will be used to rank samples for backpropagation. Options: ['loss', 'irreducible_loss']. Can also write custom scoring function.",
+        default="loss")
     score_path: Union[str, None] = hp.optional(doc="path to .csv containing sample scores", default=None)
 
     def initialize_object(self) -> SelectiveBackprop:
@@ -164,7 +177,7 @@ class SelectiveBackpropHparams(AlgorithmHparams):
 
 
 class SelectiveBackprop(Algorithm):
-    """Selectively backpropagate gradients from a subset of each batch (`Jiang et al. 2019 <https://arxiv.org/abs/1910.00762>`_).
+    """Selectively backpropagate gradients from a subset of each batch.
 
     Selective Backprop (SB) prunes minibatches according to the difficulty
     of the individual training examples, and only computes weight gradients
@@ -188,21 +201,38 @@ class SelectiveBackprop(Algorithm):
         scale_factor: scale for downsampling input for selection forward pass
         interrupt: interrupt SB with a vanilla minibatch step every
             ``interrupt`` batches
+        scoring_fxn: scoring function that will be used to rank samples for
+            backpropagation. Must have the signature scoring_fxn(p, y, **kwargs).
+        Options: ['loss', 'irreducible_loss']. 'loss' (default) = selective backprop (`Jiang et al. 2019 <https://arxiv.org/abs/1910.00762>`_).
+            'irreducible_loss' is described in (`Mindermann et al. 2021
+            <https://arxiv.org/abs/2107.02565>`_). You can also add a custom scoring
+            function to composer/algorithms/selective_sampling/scoring_functions.
+        score_path: path to .csv containing scores (or external data used for computing
+        scores). 
     """
 
-    def __init__(self, start: float, end: float, keep: float, scale_factor: float, interrupt: int,
+    def __init__(self, start: float, end: float, keep: float, scale_factor: float, interrupt: int, scoring_fxn: str,
                  score_path: Optional[None]):
+        from composer.algorithms.selective_backprop import SCORING_FXN_REGISTRY
+        self.scoring_fxn_registry = SCORING_FXN_REGISTRY
+        if scoring_fxn not in self.scoring_fxn_registry.keys():
+            ValueError(f"{scoring_fxn} is an invalid value for algorithms.selective_backprop.scoring_fxn. ")
+        self.scoring_fxn = None
         self.hparams = SelectiveBackpropHparams(start=start,
                                                 end=end,
                                                 keep=keep,
                                                 scale_factor=scale_factor,
                                                 interrupt=interrupt,
-                                                score_path=score_path)
+                                                score_path=score_path,
+                                                scoring_fxn=scoring_fxn)
 
     def match(self, event: Event, state: State) -> bool:
         """Match on Event.INIT or ``Event.AFTER_DATALOADER`` if time is between
         ``self.start`` and ``self.end``."""
         if event == Event.INIT and self.hparams.score_path:
+            return True
+
+        if event == Event.TRAINING_START:
             return True
 
         is_event = (event == Event.AFTER_DATALOADER)
@@ -228,37 +258,44 @@ class SelectiveBackprop(Algorithm):
             sample_score_dict = self.parse_score_csv()
             assert hasattr(state.train_dataloader.dataset, "samples"), "Dataset must have attribute 'samples'"
             # Add sample scores to samples in dataset
-            state.train_dataloader.dataset.samples = self.append_scores_to_samples(
-                sample_score_dict, state.train_dataloader.dataset.samples)
+            state.train_dataloader.dataset.samples = self.append_scores_to_samples(  #  type: ignore - type not found
+                sample_score_dict, state.train_dataloader.dataset.samples)  # type: ignore - ditto
+
+        if event == Event.TRAINING_START:
+            # Replace dummy loss scoring function in registry with actual loss function
+            if self.hparams.scoring_fxn == "loss":
+                assert callable(state.model.module.loss)  # type: ignore - type not found
+
+                def loss(p, y, **kwargs):
+                    return state.model.module.loss(  # type: ignore
+                        p, (None, y), reduction="none")  # type: ignore
+
+                self.scoring_fxn_registry["loss"] = loss
+            self.scoring_fxn = self.scoring_fxn_registry[self.hparams.scoring_fxn]
 
         if event == Event.AFTER_DATALOADER:
             """Apply selective backprop to the current batch."""
             if isinstance(state.batch, Sequence):
-                input, target = state.batch_pair
+                if not isinstance(state.batch_pair[0], Tensor) or not isinstance(state.batch_pair[1], Tensor):
+                    raise TypeError("Batch items must be of type torch.Tensor")
+                batch = {"data": state.batch_pair[0], "target": state.batch_pair[1]}
             elif isinstance(state.batch, Dict):
-                input = state.batch["data"]
-                target = state.batch["target"]
+                batch = state.batch
             else:
                 raise TypeError(f"state.batch must be a Sequence or Dict")
-            assert isinstance(input, Tensor) and isinstance(target, Tensor), \
-                "Multiple tensors not supported for this method yet."
 
-            assert callable(state.model.module.loss)  # type: ignore - type not found
+            assert callable(self.scoring_fxn)  # type: ignore - type not found
 
             # Model expected to only take in input, not the full batch
             model = lambda X: state.model((X, None))
 
-            def loss(p, y, reduction="none"):
-                return state.model.module.loss(p, (None, y), reduction=reduction)  # type: ignore
-
             with state.precision_context:
                 new_input, new_target = selective_backprop(
-                    input,
-                    target,
-                    model,  # type: ignore - ditto because of loss
-                    loss,
-                    self.hparams.keep,
-                    self.hparams.scale_factor)
+                    batch,
+                    model=model,  # type: ignore - ditto because of loss
+                    scoring_fxn=self.scoring_fxn,
+                    keep=self.hparams.keep,
+                    scale_factor=self.hparams.scale_factor)
             state.batch = (new_input, new_target)
 
     def parse_score_csv(self) -> Dict:
