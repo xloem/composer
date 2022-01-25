@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import csv
 import inspect
 import logging
@@ -114,6 +115,8 @@ def selective_backprop(batch: Union[Batch, Dict[str, Tensor], None] = None,
             raise ValueError("Argument 'batch' must be a dict that contains keys 'data' and 'target'.")
         X = batch["data"]
         y = batch["target"]
+    else:
+        batch = {}
 
     assert isinstance(X, Tensor)
     assert isinstance(y, Tensor)
@@ -141,7 +144,7 @@ def selective_backprop(batch: Union[Batch, Dict[str, Tensor], None] = None,
 
         # Get per-examples losses
         out = model(X_scaled)
-        losses = scoring_fxn(out, y)
+        losses = scoring_fxn(out, y, **batch)
 
         # Sort losses
         sorted_idx = torch.argsort(losses)
@@ -271,6 +274,16 @@ class SelectiveBackprop(Algorithm):
                         p, (None, y), reduction="none")  # type: ignore
 
                 self.scoring_fxn_registry["loss"] = loss
+            # Create irreducible loss partial that uses loss function, now that we have
+            # a way of getting the loss
+            if self.hparams.scoring_fxn == "irreducible_loss":
+                assert callable(state.model.module.loss)  # type: ignore - type not found
+                irreducible_loss = self.scoring_fxn_registry["irreducible_loss"]
+
+                def irreducible_loss_partial(p, y, **kwargs):
+                    return irreducible_loss(p, y, loss, **kwargs)
+
+                self.scoring_fxn_registry["irreducible_loss"] = irreducible_loss_partial
             self.scoring_fxn = self.scoring_fxn_registry[self.hparams.scoring_fxn]
 
         if event == Event.AFTER_DATALOADER:
