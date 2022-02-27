@@ -54,7 +54,7 @@ install_requires = [
     "yahp>=0.0.14",
     "requests>=2.26.0",
     "numpy==1.21.5",
-    "apache-libcloud>=3.4.1",
+    "apache-libcloud>=3.3.1",
     "psutil>=5.8.0",
 ]
 extra_deps = {}
@@ -68,6 +68,7 @@ extra_deps['dev'] = [
     'coverage[toml]>=6.1.1',
     'fasteners>=0.16.3',  # run_directory_uploader tests require fasteners
     'pytest>=7.0.0',
+    'toml>=0.10.2',
     'yapf>=0.32.0',
     'isort>=5.9.3',
     'ipython>=7.29.0',
@@ -87,7 +88,7 @@ extra_deps['dev'] = [
     'furo>=2022.1.2',
     'sphinx-copybutton>=0.4.0',
     'testbook>=0.4.2',
-    'myst-parser>=0.15.2',
+    'myst-parser==0.16.1',
     'pylint>=2.12.2',
     'docformatter>=1.4',
     'sphinx_panels>=0.6.0',
@@ -111,8 +112,8 @@ extra_deps["timm"] = [
 ]
 
 extra_deps["nlp"] = [
-    'transformers>=4.11.3',
-    'datasets>=1.14.0',
+    'transformers>=4.11',
+    'datasets>=1.14',
 ]
 
 extra_deps['all'] = set(dep for deps in extra_deps.values() for dep in deps)
@@ -129,6 +130,7 @@ setup(name="mosaicml",
       package_data={
           "composer": ['py.typed'],
           "": package_files('composer/yamls'),
+          "": package_files('composer/algorithms')
       },
       packages=setuptools.find_packages(exclude=["tests*"]),
       classifiers=[

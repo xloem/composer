@@ -3,6 +3,7 @@
 """Core code for sequence length warmup."""
 
 import textwrap
+from math import ceil
 from typing import Dict, Mapping, Optional
 
 import torch
@@ -84,15 +85,13 @@ class SeqLengthWarmup(Algorithm):
 
     .. note::
 
-        ``step_size`` should be a `multiple of eight
-        <https://developer.nvidia.com/blog/optimizing-gpu-performance-tensor-cores/>`_ for
+        ``step_size`` should be a `multiple of eight <https://developer.nvidia.com/blog/optimizing-gpu-performance-tensor-cores/>`_ for
         optimal throughput on NVIDIA GPUs
 
     .. note::
 
         Variable input lengths can create CUDA OOM errors. To avoid this,
-        we follow `PyTorch notes
-        <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#pre-allocate-memory-in-case-of-variable-input-length>`_
+        we follow `PyTorch notes <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#pre-allocate-memory-in-case-of-variable-input-length>`_
         and pre-allocate the memory with a blank forward and backward pass.
 
     See the :doc:`Method Card </method_cards/seq_length_warmup>` for more details.
@@ -144,6 +143,10 @@ class SeqLengthWarmup(Algorithm):
                     textwrap.dedent(f"""\
                     {type(self).__name__} requires state.model to be of type {ComposerTransformer.__name__}, not of type {type(state.model)}"""
                                    ))
+
+            if state.train_dataloader.batch_size is None:
+                raise RuntimeError("Sequence Length Warmup algorithm requires constant batch size.")
+
             self._original_model = state.model
             return
 
@@ -168,9 +171,8 @@ class SeqLengthWarmup(Algorithm):
 
             per_gpu_macrobatch = state.train_dataloader.batch_size
             if per_gpu_macrobatch is None:
-                raise RuntimeError("seq_length_warmup requires constant batch sizing")
-            assert per_gpu_macrobatch % state.grad_accum == 0, "grad accum should evenly divide the batch"
-            per_gpu_batch = per_gpu_macrobatch // state.grad_accum
+                raise RuntimeError("Sequence Length Warmup algorithm requires constant batch size.")
+            per_gpu_batch = ceil(per_gpu_macrobatch / state.grad_accum)
 
             input_ids = torch.randint(low=0,
                                       high=vocab_size - 1,

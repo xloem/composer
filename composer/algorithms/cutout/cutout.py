@@ -1,22 +1,43 @@
 # Copyright 2021 MosaicML. All Rights Reserved.
+
+"""Core CutOut classes and functions."""
+
 from __future__ import annotations
 
 import logging
-from typing import Optional, Union
+from typing import Optional, TypeVar, Union
 
 import numpy as np
 import torch
+from PIL.Image import Image as PillowImage
 
+from composer.algorithms.utils.augmentation_common import image_as_type
 from composer.core.types import Algorithm, Event, Logger, State, Tensor
 
 log = logging.getLogger(__name__)
 
+__all__ = ["CutOut", "cutout_batch"]
 
-def cutout_batch(X: Tensor, n_holes: int = 1, length: Union[int, float] = 0.5) -> Tensor:
+ImgT = TypeVar("ImgT", torch.Tensor, PillowImage)
+
+
+def cutout_batch(X: ImgT, n_holes: int = 1, length: Union[int, float] = 0.5) -> ImgT:
     """See :class:`CutOut`.
 
+    Example:
+         .. testcode::
+
+            from composer.algorithms.cutout import cutout_batch
+            new_input_batch = cutout_batch(
+                X=X_example,
+                n_holes=1,
+                length=16
+            )
+
     Args:
-        X (Tensor): Batch Tensor image of size (B, C, H, W).
+        X: :class:`PIL.Image.Image` or :class:`torch.Tensor` of image data. In
+            the latter case, must be a single image of shape ``CHW`` or a batch
+            of images of shape ``NCHW``.
         n_holes: Integer number of holes to cut out
         length: Side length of the square holes to cut out. Must be greater than
             0. If ``0 < length < 1``, ``length`` is interpreted as a fraction
@@ -27,22 +48,24 @@ def cutout_batch(X: Tensor, n_holes: int = 1, length: Union[int, float] = 0.5) -
         X_cutout: Batch of images with ``n_holes`` holes of dimension
             ``length x length`` replaced with zeros.
     """
-    h = X.shape[-2]
-    w = X.shape[-1]
+    X_tensor = image_as_type(X, torch.Tensor)
+    h = X_tensor.shape[-2]
+    w = X_tensor.shape[-1]
 
     if 0 < length < 1:
         length = min(h, w) * length
     length = int(length)
 
-    mask = torch.ones_like(X)
+    mask = torch.ones_like(X_tensor)
     for _ in range(n_holes):
         y = np.random.randint(h)
         x = np.random.randint(w)
 
         mask = _generate_mask(mask, w, h, x, y, length)
 
-    X_cutout = X * mask
-    return X_cutout
+    X_cutout = X_tensor * mask
+    X_out = image_as_type(X_cutout, X.__class__)  # pyright struggling with unions
+    return X_out
 
 
 class CutOut(Algorithm):
@@ -50,6 +73,21 @@ class CutOut(Algorithm):
     more square regions of an input image.
 
     This implementation cuts out the same square from all images in a batch.
+
+    Example:
+         .. testcode::
+
+            from composer.algorithms import CutOut
+            from composer.trainer import Trainer
+            cutout_algorithm = CutOut(n_holes=1, length=0.25)
+            trainer = Trainer(
+                model=model,
+                train_dataloader=train_dataloader,
+                eval_dataloader=eval_dataloader,
+                max_duration="1ep",
+                algorithms=[cutout_algorithm],
+                optimizers=[optimizer]
+            )
 
     Args:
         X (Tensor): Batch Tensor image of size (B, C, H, W).

@@ -15,11 +15,13 @@ import os
 import sys
 import textwrap
 import types
-from typing import Any, List, Optional, Tuple, Type, Union
+from typing import Any, List, Optional, Tuple, Type, Union, Dict
+import json
 
 import sphinx.application
 import sphinx.ext.autodoc
 import sphinx.util.logging
+import yahp as hp
 
 sys.path.insert(0, os.path.abspath('..'))
 
@@ -61,7 +63,7 @@ source_suffix = ['.rst', '.md']
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'tables/algorithms_table.md']
 
 napoleon_custom_sections = [('Returns', 'params_style')]
 
@@ -123,9 +125,14 @@ autodoc_type_aliases = {
 autodoc_default_options = {
     # don't document the forward() method. Because of how torch.nn.Module.forward is defined in the
     # base class, sphinx does not realize that forward overrides an inherited method.
-    'exclude-members': 'forward'
+    'exclude-members': 'forward, hparams_registry'
 }
 autodoc_inherit_docstrings = False
+
+# Monkeypatch yahp so we don't document the hparams registry
+
+hp.Hparams.__doc__ = ""
+hp.Hparams.initialize_object.__doc__ = ""
 
 pygments_style = "manni"
 pygments_dark_style = "monokai"
@@ -163,6 +170,7 @@ nitpick_ignore = [
 python_use_unqualified_type_names = True
 autodoc_typehints = "none"
 
+
 def skip_redundant_namedtuple_attributes(
     app: sphinx.application.Sphinx,
     what: str,
@@ -177,6 +185,7 @@ def skip_redundant_namedtuple_attributes(
         return True
     return None
 
+
 with open(os.path.join(os.path.dirname(__file__), "doctest_fixtures.py"), "r") as f:
     doctest_global_setup = f.read()
 
@@ -184,7 +193,7 @@ with open(os.path.join(os.path.dirname(__file__), "doctest_fixtures.py"), "r") a
 def determine_sphinx_path(item: Union[Type[object], Type[BaseException], types.MethodType, types.FunctionType],
                           module_name: str) -> Optional[str]:
     """Returns the path to where an item is documented.
-    
+
     #. If ``item`` is private, then a Sphinx warning is emitted, as private members should not be documented
     #. If ``item`` is in a private module, but ``item`` itself is public, the parents of ``item`` are searched to see if
     ``item`` is reimported. If so, the most nested, public reimport is used.
@@ -200,10 +209,11 @@ def determine_sphinx_path(item: Union[Type[object], Type[BaseException], types.M
         while public_name.startswith("_"):
             public_name = public_name[1:]
 
-        log.warning(
-            textwrap.dedent(f"""\
-            {item.__name__} is private, so it should not be re-exported.
-            To fix, please make it public by renaming to {public_name}"""))
+        if item.__qualname__.startswith("composer"):
+            log.warning(
+                textwrap.dedent(f"""\
+                {item.__qualname__} is private, so it should not be re-exported.
+                To fix, please make it public by renaming to {public_name}"""))
 
     # Find and import the most nested public module of the path
     module_parts = module_name.split(".")
@@ -220,7 +230,7 @@ def determine_sphinx_path(item: Union[Type[object], Type[BaseException], types.M
     # `item` was not found in `public_module`. Recursively search the parent module
     parent_module_name = ".".join(public_module_name.split(".")[:-1])
     if parent_module_name == "":
-        log.warning(f"{item.__name__} is not re-imported by any public parent or grandparent module.")
+        log.warning(f"{item.__name__} in {module_name} is not re-imported by any public parent or grandparent module.")
         return None
     return determine_sphinx_path(item, parent_module_name)
 
@@ -236,7 +246,7 @@ def add_module_summary_tables(
     """This hook adds in summary tables for each module, documenting all functions, exceptions, classes, and attributes.
 
     It links reimported imports to their original source, as not to create a duplicate, indexed toctree entry.
-    It automatically inserts itself at the end of each module docstring. 
+    It automatically inserts itself at the end of each module docstring.
     """
     del app, options  # unused
     functions: List[Tuple[str, types.FunctionType]] = []
@@ -247,6 +257,7 @@ def add_module_summary_tables(
     if len(lines) == 0:
         # insert a stub docstring so it doesn't start with functions/exceptions/classes/attributes
         lines.append(name)
+
     if what == "module":
 
         try:
@@ -286,7 +297,12 @@ def add_module_summary_tables(
         classes.sort(key=lambda x: x[0])
         attributes.sort(key=lambda x: x[0])
 
-        for category, category_name in ((functions, "Functions"), (classes, "Classes"), (exceptions, "Exceptions")):
+        # separate hparams classes with other classes
+        hparams = [(n, c) for (n, c) in classes if issubclass(c, hp.Hparams)]
+        classes = [(n, c) for (n, c) in classes if not issubclass(c, hp.Hparams)]
+
+        for category, category_name in ((functions, "Functions"), (classes, "Classes"), (hparams, "Hparams"),
+                                        (exceptions, "Exceptions")):
             sphinx_lines = []
             for item_name, item in category:
                 sphinx_path = determine_sphinx_path(item, item.__module__)
@@ -296,6 +312,9 @@ def add_module_summary_tables(
                 lines.append("")
                 lines.append(f".. rubric:: {category_name}")
                 lines.append("")
+                if category_name == 'Hparams':
+                    lines.append("These classes are used with :mod:`yahp` for ``YAML``-based configuration.")
+                    lines.append("")
                 lines.append(".. autosummary::")
                 lines.append("      :nosignatures:")
                 lines.append("")
@@ -333,6 +352,47 @@ def add_module_summary_tables(
                 lines.extend(sphinx_lines)
 
 
+def rstjinja(app, docname, source):
+    """
+    Render our pages as a jinja template for fancy templating goodness.
+    """
+    # Make sure we're outputting HTML
+    if app.builder.format != 'html':
+        return
+    src = source[0]
+    rendered = app.builder.templates.render_string(src, app.config.html_context)
+    source[0] = rendered
+
+
+def get_algorithms_metadata() -> Dict[str, Dict[str, str]]:
+    EXCLUDE = ['no_op_model']
+
+    root = os.path.join(os.path.dirname(__file__), '..', '..', 'composer', 'algorithms')
+    algorithms = next(os.walk(root))[1]
+    algorithms = [algo for algo in algorithms if algo not in EXCLUDE]
+
+    metadata = {}
+    for name in algorithms:
+        json_path = os.path.join(root, name, 'metadata.json')
+
+        if os.path.isfile(json_path):
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+
+            for key, value in data.items():
+                if key in metadata:
+                    raise ValueError(f'Duplicate keys in metadata: {key}')
+                metadata[key] = value
+
+    if not metadata:
+        raise ValueError(f"No metadata found, {root} not correctly configured.")
+    return metadata
+
+
+html_context = {'metadata': get_algorithms_metadata()}
+
+
 def setup(app: sphinx.application.Sphinx):
     app.connect('autodoc-skip-member', skip_redundant_namedtuple_attributes)
     app.connect('autodoc-process-docstring', add_module_summary_tables)
+    app.connect('source-read', rstjinja)
