@@ -5,7 +5,7 @@ train_dataset:
     split: train
     max_shards: -1
     max_samples: 275184000 
-    max_seq_len: 128
+    max_seq_len: 128 
     group_method: truncate # TODO: check that the code for this one is right
     tokenizer_name: bert-base-uncased
     use_masked_lm: true # TODO: check that the code for this one is right 
@@ -20,7 +20,7 @@ val_dataset:
     split: validation
     max_shards: -1
     max_samples: 32000 # there's a bug, this is currently per-device 
-    max_seq_len: 128
+    max_seq_len: 128 
     group_method: truncate # TODO: check that the code for this one is right
     tokenizer_name: bert-base-uncased 
     use_masked_lm: true # TODO: check that the code for this one is right
@@ -63,8 +63,17 @@ optimizer:
     eps: 1.0e-06
     weight_decay: 1.0e-5
 schedulers:
-  - linear_decay_with_warmup:
-      warmup_time: 0.06dur
+  - warmup:
+      warmup_method: linear
+      warmup_iters: 0.06dur
+      warmup_factor: 0
+      interval: step
+  - linear_decay:
+      start_factor: 1.0
+      end_factor: 0.0
+      total_iters: 0.94dur
+      interval: step
+      verbose: false
 loggers:
   - file:
       log_level: batch 
@@ -85,10 +94,12 @@ dataloader:
   num_workers: 1
   timeout: 0
   prefetch_factor: 2
-grad_accum: 1
+grad_accum: 2
 precision: amp
 grad_clip_norm: None
 validate_every_n_batches: 1000
 validate_every_n_epochs: 1
-save_folder: bert_checkpoints/bert_dropout_test
-save_interval: "100ba"
+save_checkpoint:
+  folder: bert_checkpoints
+  interval: 3500
+  interval_unit: it
