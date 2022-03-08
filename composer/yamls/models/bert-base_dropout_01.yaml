@@ -38,7 +38,7 @@ model:
       gradient_checkpointing: false
       classifier_dropout: null
       hidden_act: gelu
-      hidden_dropout_prob: 0.0
+      hidden_dropout_prob: 0.1
       hidden_size: 768
       initializer_range: 0.02
       intermediate_size: 3072
@@ -90,7 +90,7 @@ precision: amp
 grad_clip_norm: None
 validate_every_n_batches: 1000
 validate_every_n_epochs: 1
-save_folder: bert_checkpoints/bert_dropout_00
+save_folder: bert_checkpoints/bert_dropout_01
 save_interval: "100ba"
 callbacks:
   run_directory_uploader:
