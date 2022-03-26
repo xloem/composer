@@ -50,8 +50,14 @@ precision: amp
 grad_clip_norm: None
 validate_every_n_batches: 2300
 validate_every_n_epochs: 1
+save_folder: bert_checkpoints
+save_interval: "100ba"
 callbacks:
-  - lr_monitor: {}
+  run_directory_uploader:
+    provider: "GOOGLE_STORAGE"
+    container: "bert_checkpoints"
+    key_environ: KEY
+    secret_environ: SECRET
 load_path: https://storage.googleapis.com/llm_checkpoints/bert_checkpoint/bert_checkpoints/ep7.pt
 load_weights_only: true
 load_strict_model_weights: false
