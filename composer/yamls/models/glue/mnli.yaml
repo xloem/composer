@@ -29,10 +29,10 @@ optimizer:
     eps: 1.0e-06
     weight_decay: 5.0e-6
 schedulers:
-  - linear_decay_with_warmup:
-      warmup_time: 0.06dur
+  linear_decay_with_warmup:
+    warmup_time: 0.06dur
 loggers:
-  - tqdm: {}
+  tqdm: {}
 max_duration: 3ep
 train_batch_size: 48
 eval_batch_size: 48
