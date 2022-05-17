@@ -156,12 +156,6 @@ The following rules apply to public APIs:
 not for data validation. As asserts can be disabled in python by using the `-O` flag (e.g. `python -O path/to/script.py`),
 they are not guaranteed to run. For data validation, instead use a style like the following:
 
-<!--
-```python
-parameter = None
-```
--->
-<!--pytest-codeblocks:cont-->
 <!--pytest-codeblocks:expect-error-->
 ```python
 if parameter is None:
@@ -186,7 +180,6 @@ All imports in composer should be absolute -- that is, they do not begin with a 
     1.  The import must be conditionally imported in the code. For example:
 
         <!--pytest-codeblocks:importorskip(monai)-->
-        <!--pytest-codeblocks:importorskip(scikit-learn)-->
         ```python
         from composer.utils import MissingConditionalImportError
 
