@@ -52,8 +52,7 @@ for epoch in range(10):
 
 ### Composer Trainer
 
-<!-- TODO: Address timeouts -->
-<!--pytest-codeblocks:skip-->
+<!--pytest-codeblocks:custom-mark(pytest.mark.gpu)-->
 ```python
 # Instantiate the algorithm and pass it into the Trainer
 # The trainer will automatically run it at the appropriate point in the training loop
@@ -65,6 +64,7 @@ from composer.trainer import Trainer
 
 # Stochastic depth can only be run on ResNet-50/101/152
 model = resnet50()
+train_dataloader = DataLoader(train_dataset, batch_size=128)
 
 stochastic_depth = StochasticDepth(
     target_layer_name='ResNetBottleneck',
@@ -76,7 +76,7 @@ stochastic_depth = StochasticDepth(
 trainer = Trainer(
     model=model,
     train_dataloader=train_dataloader,
-    max_duration='10ep',
+    max_duration='1ep',
     algorithms=[stochastic_depth]
 )
 

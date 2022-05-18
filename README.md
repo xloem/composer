@@ -121,8 +121,7 @@ For more examples, see the [Composer Functional API Colab notebook](https://cola
 
 For the best experience and the most efficient possible training, we recommend using Composer's built-in trainer, which automatically takes care of the low-level details of using speedup methods and provides useful abstractions that facilitate rapid experimentation.
 
-<!-- TODO: Address timeouts -->
-<!--pytest-codeblocks:skip-->
+<!--pytest-codeblocks:custom-mark(pytest.mark.gpu)-->
 ```python
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms

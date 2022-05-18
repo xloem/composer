@@ -45,14 +45,17 @@ def training_loop(model, train_loader):
 
 ### Composer Trainer
 
-<!-- TODO: Address timeouts -->
-<!--pytest-codeblocks:skip-->
+<!--pytest-codeblocks:custom-mark(pytest.mark.gpu)-->
 ```python
 # Instantiate the algorithm and pass it into the Trainer
 # The trainer will automatically run it at the appropriate point in the training loop
 
 from composer.algorithms import SqueezeExcite
 from composer.trainer import Trainer
+from composer.models import MNIST_Classifier
+
+model = MNIST_Classifier(num_classes=10)
+train_dataloader = DataLoader(train_dataset, batch_size=128)
 
 algo = SqueezeExcite(
     min_channels=128,
@@ -62,7 +65,7 @@ algo = SqueezeExcite(
 trainer = Trainer(
     model=model,
     train_dataloader=train_dataloader,
-    max_duration='10ep',
+    max_duration='1ep',
     algorithms=[algo]
 )
 

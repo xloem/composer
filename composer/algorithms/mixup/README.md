@@ -65,11 +65,14 @@ def training_loop(model, train_loader):
 
 Here we run `mixup` using index labels and interpolate the loss (a trick when using cross entropy)
 
-<!-- TODO: Address timeouts -->
-<!--pytest-codeblocks:skip-->
+<!--pytest-codeblocks:custom-mark(pytest.mark.gpu)-->
 ```python
 from composer.algorithms import MixUp
 from composer.trainer import Trainer
+from composer.models import MNIST_Classifier
+
+model = MNIST_Classifier(num_classes=10)
+train_dataloader = DataLoader(train_dataset, batch_size=128)
 
 mixup = MixUp(
     alpha=0.2,
@@ -88,8 +91,7 @@ trainer.fit()
 
 Here we run `mixup` using dense/one-hot labels and interpolate the labels (general case).
 
-<!-- TODO: Address timeouts -->
-<!--pytest-codeblocks:skip-->
+<!--pytest-codeblocks:custom-mark(pytest.mark.gpu)-->
 ```python
 from composer.algorithms import MixUp
 from composer.trainer import Trainer

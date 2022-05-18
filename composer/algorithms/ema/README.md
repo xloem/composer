@@ -33,14 +33,17 @@ def training_loop(model, train_loader):
 
 ### Composer Trainer
 
-<!-- TODO: Address timeouts -->
-<!--pytest-codeblocks:skip-->
+<!--pytest-codeblocks:custom-mark(pytest.mark.gpu)-->
 ```python
 # Instantiate the algorithm and pass it into the Trainer
 # The trainer will automatically run it at the appropriate points in the training loop
 
 from composer.algorithms import EMA
 from composer.trainer import Trainer
+from composer.models import MNIST_Classifier
+
+model = MNIST_Classifier(num_classes=10)
+train_dataloader = DataLoader(train_dataset, batch_size=128)
 
 ema = EMA(half_life='50ba')
 
