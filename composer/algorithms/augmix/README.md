@@ -67,6 +67,7 @@ dataset = VisionDataset(data_path, transform=composed)
 ```python
 # Instantiate the algorithm and pass it into the Trainer
 # The trainer will automatically run it at the appropriate points in the training loop
+from torch.utils.data import DataLoader
 
 from composer.algorithms import AugMix
 from composer.trainer import Trainer

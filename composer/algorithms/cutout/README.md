@@ -46,6 +46,7 @@ def training_loop(model, train_loader):
 ```python
 # Instantiate the algorithm and pass it into the Trainer
 # The trainer will automatically run it at the appropriate points in the training loop
+from torch.utils.data import DataLoader
 
 from composer.algorithms import Cutout
 from composer.trainer import Trainer

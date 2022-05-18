@@ -54,10 +54,12 @@ def training_loop(model, train_loader):
 ```python
 # Instantiate the algorithm and pass it into the Trainer
 # The trainer will automatically run it at the appropriate point in the training loop
+from torch.utils.data import DataLoader
 
 from composer.algorithms import BlurPool
 from composer.trainer import Trainer
 from composer.models import MNIST_Classifier
+
 
 model = MNIST_Classifier(num_classes=10)
 train_dataloader = DataLoader(train_dataset, batch_size=128)
