@@ -57,6 +57,7 @@ for epoch in range(10):
 # Instantiate the algorithm and pass it into the Trainer
 # The trainer will automatically run it at the appropriate point in the training loop
 from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
 
 from composer.algorithms import StochasticDepth
 from composer.trainer import Trainer
@@ -65,6 +66,8 @@ from composer.trainer import Trainer
 
 # Stochastic depth can only be run on ResNet-50/101/152
 model = resnet50()
+transform = transforms.Compose([transforms.ToTensor()])
+train_dataset = datasets.MNIST("data", download=True, train=True, transform=transform)
 train_dataloader = DataLoader(train_dataset, batch_size=128)
 
 stochastic_depth = StochasticDepth(

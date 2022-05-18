@@ -68,12 +68,15 @@ Here we run `mixup` using index labels and interpolate the loss (a trick when us
 <!--pytest-codeblocks:custom-mark(pytest.mark.gpu)-->
 ```python
 from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
 
 from composer.algorithms import MixUp
 from composer.trainer import Trainer
 from composer.models import MNIST_Classifier
 
 model = MNIST_Classifier(num_classes=10)
+transform = transforms.Compose([transforms.ToTensor()])
+train_dataset = datasets.MNIST("data", download=True, train=True, transform=transform)
 train_dataloader = DataLoader(train_dataset, batch_size=128)
 
 mixup = MixUp(

@@ -61,12 +61,15 @@ dataset = VisionDataset(data_path, transform=composed)
 # Instantiate the algorithm and pass it into the Trainer
 # The trainer will automatically run it at the appropriate points in the training loop
 from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
 
 from composer.algorithms import RandAugment
 from composer.trainer import Trainer
 from composer.models import MNIST_Classifier
 
 model = MNIST_Classifier(num_classes=10)
+transform = transforms.Compose([transforms.ToTensor()])
+train_dataset = datasets.MNIST("data", download=True, train=True, transform=transform)
 train_dataloader = DataLoader(train_dataset, batch_size=128)
 
 randaugment_algorithm = RandAugment(severity=9, 
