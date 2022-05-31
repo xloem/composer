@@ -42,7 +42,7 @@ from composer.utils import dist, ensure_tuple, format_name_with_dist, map_collec
 from composer.utils.checkpoint import load_checkpoint, save_checkpoint
 from composer.utils.file_helpers import GetFileNotFoundException
 from composer.utils.import_helpers import MissingConditionalImportError
-from composer.utils.object_store import ObjectStore
+from composer.utils.object_store import LibcloudObjectStore
 
 log = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ Scheduler = Union[ComposerScheduler, PyTorchScheduler]
 def _raise_missing_argument_exception(arg_name: str):
     raise ValueError((f"{arg_name} is a required argument and must be specified when constructing the "
                       f"{Trainer.__name__} or when calling {Trainer.__name__}.{Trainer.fit.__name__}(). "
-                      f"To fix, please specify `arg_name` via {Trainer.__name__}({arg_name}=...) or "
+                      f"To fix, please specify `{arg_name}` via {Trainer.__name__}({arg_name}=...) or "
                       f"{Trainer.__name__}.{Trainer.fit.__name__}({arg_name}=...)."))
 
 
@@ -195,7 +195,7 @@ def _distribute_and_get_random_seed(seed: Optional[int], device: Device):
 def _get_ddp_sync_strategy(ddp_sync_strategy: Optional[Union[str, DDPSyncStrategy]], find_unused_parameters: bool):
     if ddp_sync_strategy is None:
         if find_unused_parameters:
-            ddp_sync_strategy = DDPSyncStrategy.FORCED_SYNC
+            ddp_sync_strategy = DDPSyncStrategy.MULTI_AUTO_SYNC
         else:
             ddp_sync_strategy = DDPSyncStrategy.SINGLE_AUTO_SYNC
     else:
@@ -442,8 +442,8 @@ class Trainer:
             correct state.
 
             If ``None`` then no checkpoint will be loaded. (default: ``None``)
-        load_object_store (Union[ObjectStore, LoggerDestination], optional): If the ``load_path`` is in an
-            object store (i.e. AWS S3 or Google Cloud Storage), an instance of :class:`.ObjectStore` or
+        load_object_store (Union[LibcloudObjectStore, LoggerDestination], optional): If the ``load_path`` is in an
+            object store (i.e. AWS S3 or Google Cloud Storage), an instance of :class:`.LibcloudObjectStore` or
             :class:`.LoggerDestination` which will be used to retreive the checkpoint. Otherwise, if the
             checkpoint is a local filepath, set to ``None``. Ignored if ``load_path`` is ``None``.
             (default: ``None``)
@@ -459,12 +459,12 @@ class Trainer:
             .. testcode::
 
                 from composer import Trainer
-                from composer.utils import ObjectStore
+                from composer.utils import LibcloudObjectStore
 
                 # Create the object store provider with the specified credentials
                 creds = {"key": "object_store_key",
                          "secret": "object_store_secret"}
-                store = ObjectStore(provider="s3",
+                store = LibcloudObjectStore(provider="s3",
                                             container="my_container",
                                             provider_kwargs=creds)
 
@@ -489,7 +489,7 @@ class Trainer:
                 trainer.engine.close()
         load_weights_only (bool, optional): Whether or not to only restore the weights from the checkpoint without
             restoring the associated state. Ignored if ``load_path`` is ``None``. (default: ``False``)
-        load_strict (bool, optional): Ensure that the set of weights in the checkpoint and model must exactly match.
+        load_strict_model_weights (bool, optional): Ensure that the set of weights in the checkpoint and model must exactly match.
             Ignored if ``load_path`` is ``None``. (default: ``False``)
         load_chunk_size (int, optional): Chunk size (in bytes) to use when downloading checkpoints.
             Ignored if ``load_path`` is either ``None`` or a local file path. (default: ``1,048,675``)
@@ -668,9 +668,9 @@ class Trainer:
 
         # Load Checkpoint
         load_path: Optional[str] = None,
-        load_object_store: Optional[Union[ObjectStore, LoggerDestination]] = None,
+        load_object_store: Optional[Union[LibcloudObjectStore, LoggerDestination]] = None,
         load_weights_only: bool = False,
-        load_strict: bool = False,
+        load_strict_model_weights: bool = False,
         load_chunk_size: int = 1_048_576,
         load_progress_bar: bool = True,
 
@@ -944,7 +944,7 @@ class Trainer:
                                               path=load_path,
                                               object_store=load_object_store,
                                               load_weights_only=load_weights_only,
-                                              strict_model_weights=load_strict,
+                                              strict_model_weights=load_strict_model_weights,
                                               chunk_size=load_chunk_size,
                                               progress_bar=load_progress_bar)
             log.info(f"Setting seed to {self.state.seed}")
