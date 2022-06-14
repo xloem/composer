@@ -7,7 +7,6 @@ integrations:
   - integration_type: "wandb"
     project: behrad_benchmarker
     entity: mosaic-ml
-    name: r56-bench-r1z1-sampled
   - integration_type: "git_repo"
     git_repo: mosaicml/composer
     git_branch: dev
