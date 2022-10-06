@@ -14,32 +14,32 @@ from composer.algorithms.alibi.attention_surgery_functions.utils import (policy_
 
 from torch.fft import fft, ifft, fft2, ifft2
 
-def hrr_approx_inverse(x):
-    return torch.roll(torch.flip(x, dims=(-1,)), 1, dims=-1)
+def hrr_approx_inverse(x, dim=-1):
+    return torch.roll(torch.flip(x, dims=(dim,)), 1, dims=dim)
 
-def hrr_exact_inverse(x):
-    return torch.nan_to_num(ifft(1. / fft(x)).real)
+def hrr_exact_inverse(x, dim=-1):
+    return torch.nan_to_num(ifft(1. / fft(x, dim=dim), dim=dim).real)
 
 def hrr_inverse_2d(x):
     return torch.nan_to_num(ifft2(1. / fft2(x)).real)
 
-def hrr_projection(x):
-    return torch.nan_to_num(ifft(fft(x) / torch.abs(fft(x))).real)
+def hrr_projection(x, dim=-1):
+    return torch.nan_to_num(ifft(fft(x, dim=dim) / torch.abs(fft(x, dim=dim)), dim=dim).real)
 
 def hrr_projection_2d(x):
     return torch.nan_to_num(ifft2(fft2(x) / torch.abs(fft2(x))).real)
 
-def hrr_binding(x, y):
-    return ifft(torch.mul(fft(x), fft(y))).real
+def hrr_binding(x, y, dim=-1):
+    return ifft(torch.mul(fft(x, dim=dim), fft(y, dim=dim), dim=dim)).real
 
 def hrr_binding_2d(x, y):
     return ifft2(torch.mul(fft2(x), fft2(y))).real
 
-def hrr_approx_unbinding(b, y):
-    return hrr_binding(b, hrr_approx_inverse(y))
+def hrr_approx_unbinding(b, y, dim=-1):
+    return hrr_binding(b, hrr_approx_inverse(y, dim=dim), dim=dim)
 
-def hrr_exact_unbinding(b, y):
-    return hrr_binding(b, hrr_exact_inverse(y))
+def hrr_exact_unbinding(b, y, dim=-1):
+    return hrr_binding(b, hrr_exact_inverse(y, dim=dim), dim=dim)
 
 def hrr_unbinding_2d(b, y):
     return hrr_binding_2d(b, hrr_inverse_2d(y))
@@ -65,9 +65,16 @@ def gpt2_attention_converter(module: torch.nn.Module, module_index: int, max_seq
                             n_heads=int(module.num_heads),
                             max_token_length=max_sequence_length,
                             causal=True)
+
+    # Alibi
     setattr(module, '_attn', MethodType(_attn, module))
 
     module = enlarge_mask(module, max_sequence_length)
+
+    # HRR
+    module.bias = module.bias.bool() # causal mask
+    del module.masked_bias # attention mask
+
     return module
 
 
@@ -79,8 +86,7 @@ def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple
     #     attn_weights = torch.matmul(query, key.transpose(-1, -2))
     #   End of old code
     # Pair keys and values using hrr binding
-        # TODO: I'm thinking only 1d binding is needed here (along embedding dimension), since the tokens are masked and weights summed.
-    attn_weights = hrr_binding_2d(key.transpose(-1, -2), value.transpose(-1, -2)).transpose(-1, -2)
+    attn_weights = hrr_binding(key, value, dim=-2)
     # End first half of hrr modification
 
     if self.scale_attn_weights:
@@ -94,19 +100,25 @@ def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple
     attn_weights = attn_weights + alibi
     # End alibi modification
 
-    assert not self.is_cross_attention
     if not self.is_cross_attention:
         # if only "normal" attention layer implements causal mask
         query_length, key_length = query.size(-2), key.size(-2)
-        causal_mask = self.bias[:, :, key_length - query_length:key_length, :key_length].bool()
-        attn_weights = torch.where(causal_mask, attn_weights, self.masked_bias.to(attn_weights.dtype))
 
-    # ====> i'm here. beta is attn_weights.transpose(-1,-2).
-    # i'm checking whether attention_mask uses large values, since they are summed
+        # This is a change to the masking arithmetic for hrr
+        causal_mask = self.bias[:, :, key_length - query_length:key_length, :key_length]
+        attn_weights = torch.where(causal_mask, attn_weights, 0)
+        # End change to masking arithmetic
+
+
     if attention_mask is not None:
         # Apply the attention mask
-        attn_weights = attn_weights + attention_mask
 
+        # This is a change to the masking arithmetic for hrr
+        # The broadcast comparison could be optimized into GPT2Model.forward .
+        attn_weights = torch.where(attention_mask == 0, attn_weights, 0)
+        # End change to masking arithmetic
+
+    # ====> i'm here. beta is attn_weights.transpose(-1,-2). it hasn't been composed into beta_plus yet.
     attn_weights = torch.nn.Softmax(dim=-1)(attn_weights)
     attn_weights = self.attn_dropout(attn_weights)
 
