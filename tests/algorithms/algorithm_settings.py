@@ -17,7 +17,7 @@ import composer
 import composer.algorithms
 from composer import Algorithm
 from composer.algorithms import (EMA, SAM, SWA, Alibi, AugMix, BlurPool, ChannelsLast, ColOut, CutMix, CutOut,
-                                 Factorize, FusedLayerNorm, GatedLinearUnits, GhostBatchNorm, GradientClipping,
+                                 Factorize, FusedLayerNorm, GatedLinearUnits, GhostBatchNorm, GradientClipping, HRRAlibi,
                                  LabelSmoothing, LayerFreezing, MixUp, NoOpModel, ProgressiveResizing, RandAugment,
                                  SelectiveBackprop, SeqLengthWarmup, SqueezeExcite, StochasticDepth,
                                  WeightStandardization)
@@ -112,6 +112,7 @@ _settings: Dict[Type[Algorithm], Optional[Dict[str, Any]]] = {
             'ghost_batch_size': 2,
         }
     },
+    HRRAlibi: None,  # NLP settings needed
     LabelSmoothing: simple_vision_settings,
     LayerFreezing: simple_vision_settings,
     MixUp: simple_vision_settings,
