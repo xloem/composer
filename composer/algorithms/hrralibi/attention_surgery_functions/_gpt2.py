@@ -31,7 +31,7 @@ def hrr_projection_2d(x):
     return torch.nan_to_num(ifft2(fft2(x) / torch.abs(fft2(x))).real)
 
 def hrr_binding(x, y, dim=-1):
-    return ifft(torch.mul(fft(x, dim=dim), fft(y, dim=dim), dim=dim)).real
+    return ifft(torch.mul(fft(x, dim=dim), fft(y, dim=dim)), dim=dim).real
 
 def hrr_binding_2d(x, y):
     return ifft2(torch.mul(fft2(x), fft2(y))).real
