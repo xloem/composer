@@ -9,7 +9,7 @@ from typing import Tuple
 import torch
 from transformers.models.gpt2.modeling_gpt2 import GPT2Attention, GPT2Model
 
-from composer.algorithms.alibi.attention_surgery_functions.utils import (policy_registry, register_alibi,
+from composer.algorithms.hrralibi.attention_surgery_functions.utils import (policy_registry, register_alibi,
                                                                          zero_and_freeze_expand_position_embeddings)
 
 from torch.fft import fft, ifft, fft2, ifft2

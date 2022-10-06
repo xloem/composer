@@ -10,7 +10,7 @@ from torch import nn
 from transformers.models.bert.modeling_bert import BertEmbeddings, BertSelfAttention
 from transformers.models.roberta.modeling_roberta import RobertaEmbeddings, RobertaSelfAttention
 
-from composer.algorithms.alibi.attention_surgery_functions.utils import (policy_registry, register_alibi,
+from composer.algorithms.hrralibi.attention_surgery_functions.utils import (policy_registry, register_alibi,
                                                                          zero_and_freeze_expand_position_embeddings)
 
 
