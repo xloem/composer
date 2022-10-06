@@ -50,6 +50,7 @@ from composer.algorithms.fused_layernorm import FusedLayerNorm
 from composer.algorithms.gated_linear_units import GatedLinearUnits
 from composer.algorithms.ghost_batchnorm import GhostBatchNorm
 from composer.algorithms.gradient_clipping import GradientClipping
+from composer.algorithms.hrralibi import HRRAlibi
 from composer.algorithms.label_smoothing import LabelSmoothing
 from composer.algorithms.layer_freezing import LayerFreezing
 from composer.algorithms.mixup import MixUp
@@ -80,6 +81,7 @@ __all__ = [
     'GatedLinearUnits',
     'GhostBatchNorm',
     'GradientClipping',
+    'HRRAlibi',
     'LabelSmoothing',
     'LayerFreezing',
     'MixUp',
