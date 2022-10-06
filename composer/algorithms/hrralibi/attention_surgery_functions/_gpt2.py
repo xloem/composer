@@ -79,6 +79,7 @@ def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple
     #     attn_weights = torch.matmul(query, key.transpose(-1, -2))
     #   End of old code
     # Pair keys and values using hrr binding
+        # TODO: I'm thinking only 1d binding is needed here (along embedding dimension), since the tokens are masked and weights summed.
     attn_weights = hrr_binding_2d(key.transpose(-1, -2), value.transpose(-1, -2)).transpose(-1, -2)
     # End first half of hrr modification
 
