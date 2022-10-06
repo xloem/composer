@@ -87,13 +87,13 @@ def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple
     H = -2
 
 
-    # This is the binding portion of the hrr modification
-    #   This is the old code, prior to the modification
+    # This is the first half of the hrr modification
+    #   This is the old code, frm "attention is all you need"
     #     attn_weights = torch.matmul(query, key.transpose(-1, -2))
     #   End of old code
     # Pair keys and values using hrr binding
     attn_weights = hrr_binding(key, value, dim=H)
-    # End binding portion of hrr modification
+    # End first half of hrr modification
 
     if self.scale_attn_weights:
         attn_weights = attn_weights / (float(value.size(-1))**0.5)
@@ -124,37 +124,31 @@ def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple
         attn_weights = torch.where(attention_mask == 0, attn_weights, 0)
         # End change to masking arithmetic
 
-    # This is the second half of the hrr modification,
-    # The approach changes from "Attention is All You Need".
-    #   This is the old code, prior to the modification
-    #     attn_weights = torch.nn.Softmax(dim=-1)(attn_weights)
-    #     attn_weights = self.attn_dropout(attn_weights)
-    #
-    #     # Mask heads if we want to
-    #     if head_mask is not None:
-    #         attn_weights = attn_weights * head_mask
-    # 
-    #     attn_output = torch.matmul(attn_weights, value)
-    #   End of old code
+    # This old code was here but its effect is replaced by the HRR attention.
+    #  attn_weights = torch.nn.Softmax(dim=-1)(attn_weights)
+    # End of old code
+
     attn_weights = self.attn_dropout(attn_weights)
-    
+
     # Mask heads if we want to
     if head_mask is not None:
         attn_weights = attn_weights * head_mask
 
-    # A composite representation of the terms is made by adding the sequence elements together.
+    # This is the second half of the hrr modification,
+    #   This is the old code
+    #     attn_output = torch.matmul(attn_weights, value)
+    #   End of old code
+    # Add the sequence elements to produce a composite representation of the terms.
     attn_weights = attn_weights.sum(dim=T)
-
-    # The unbinding operation is used to retrieve the value vectors from the query-associated keys.
+    # Retrieve the value vectors from the query-associated keys by unbinding.
     attn_weights = hrr_approx_unbinding(attn_weights, query, dim=H)
-    # The weight values are the softmax of the cosines between the embedding vectors.
+    # Calculate the final weights as the softmax of the cosine similarity.
     attn_weights = torch.nn.functional.softmax(torch.cosine_similarity(attn_weights, value, dim=H))
-    # The final attention is the product of the weights and values.
+    # Calculate the final output as the product with the original values.
     attn_output = attn_wieghts * value
     # End second half of hrr modification
 
     # ====> i've gone through this function once and attempted to convert it.
-    #       the second half may be unneccessarily disorganised, as i saved when i got here.
     #       i have not checked for typos or parse failures or anything or tried running it.
     #       some of the utility functions at the top could be removed.
 
