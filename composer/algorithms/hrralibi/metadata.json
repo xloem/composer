@@ -1,15 +1,15 @@
 {
-    "alibi": {
-        "name": "Alibi",
-        "class_name": "Alibi",
-        "functional": "apply_alibi",
-        "tldr": "Replace attention with AliBi",
+    "hrralibi": {
+        "name": "HRR-Alibi",
+        "class_name": "HRRAlibi",
+        "functional": "apply_hrralibi",
+        "tldr": "Replace attention with HRR and AliBi",
         "attribution": "(Press et al, 2021)",
         "link": "https://arxiv.org/abs/2108.12409v1",
         "domains": [
             "nlp"
         ],
-        "summary": "Encodes position information by biasing the query-key attention scores proportionally to each token pair\u2019s distance.",
+        "summary": "This is a modification of AliBi to attempt to include Holographic Reduced Representations.",
         "use": "Transformer-based NLP models"
     }
 }

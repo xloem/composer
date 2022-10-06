@@ -8,6 +8,6 @@ attention scores proportionally to each token pair's distance.
 See the :doc:`Method Card </method_cards/alibi>` for more details.
 """
 
-from composer.algorithms.alibi.alibi import Alibi, apply_alibi
+from composer.algorithms.hrralibi.hrralibi import HRRAlibi, apply_hrralibi
 
-__all__ = ['Alibi', 'apply_alibi']
+__all__ = ['HRRAlibi', 'apply_hrralibi']

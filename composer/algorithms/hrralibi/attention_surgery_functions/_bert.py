@@ -31,6 +31,7 @@ def bert_embedding_converter(module: torch.nn.Module, module_index: int, max_seq
 
 @policy_registry.register(BertSelfAttention, RobertaSelfAttention)
 def bert_attention_converter(module: torch.nn.Module, module_index: int, max_sequence_length: int) -> torch.nn.Module:
+    raise NotImplementedError("HRR for Bert ... quite yet")
     """Adds ALiBi to Bert-style SelfAttention."""
     assert isinstance(module, (BertSelfAttention, RobertaSelfAttention))
     del module_index  # unused

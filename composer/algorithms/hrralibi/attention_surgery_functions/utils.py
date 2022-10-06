@@ -11,25 +11,25 @@ import torch
 
 log = logging.getLogger(__name__)
 
-# Alibi applies module surgery to registered modules using their associated alibi replacement function.
+# HRRAlibi applies module surgery to registered modules using their associated hrralibi replacement function.
 # Such functions must have the following signature:
-AlibiReplacementFunction = Callable[[torch.nn.Module, int, int], Optional[torch.nn.Module]]
+HRRAlibiReplacementFunction = Callable[[torch.nn.Module, int, int], Optional[torch.nn.Module]]
 
 
-class PolicyRegistry(Dict[Type[torch.nn.Module], AlibiReplacementFunction]):
+class PolicyRegistry(Dict[Type[torch.nn.Module], HRRAlibiReplacementFunction]):
     """A registry mapping for ALiBi surgery."""
 
     def register(self,
-                 *modules: Type[torch.nn.Module]) -> Callable[[AlibiReplacementFunction], AlibiReplacementFunction]:
+                 *modules: Type[torch.nn.Module]) -> Callable[[HRRAlibiReplacementFunction], HRRAlibiReplacementFunction]:
         """This decorator registers mappings from torch module types to their ALiBi surgery functions.
 
         To accommodate the specifics of composer's module surgery, our ALiBi implementation uses a
-        registry to create a ``Mapping[torch.nn.Module, AlibiReplacementFunction]``, where
-        `AlibiReplacementFunction` is any function that has a :data:`~.module_surgery.ReplacementFunction`
+        registry to create a ``Mapping[torch.nn.Module, HRRAlibiReplacementFunction]``, where
+        `HRRAlibiReplacementFunction` is any function that has a :data:`~.module_surgery.ReplacementFunction`
         signature but with an additional ``max_sequence_length`` argument.
 
         Implementation files (e.g., :file:`_gpt2.py`) populate :data:`policy_registry` (an instance of
-        this class) by defining instances of `AlibiReplacementFunction` functions and decorating them
+        this class) by defining instances of `HRRAlibiReplacementFunction` functions and decorating them
         with :meth:`policy_registry.register` (this method). One or more ``Type[torch.nn.Module]`` source
         classes must be supplied as inputs to the decorator, which tells :data:`policy_registry`
         to map those classes to the decorated function.
@@ -50,12 +50,12 @@ class PolicyRegistry(Dict[Type[torch.nn.Module], AlibiReplacementFunction]):
 
                return module
 
-        In the above example, ``convert_gpt2_attention`` (an instance of a `AlibiReplacementFunction`
+        In the above example, ``convert_gpt2_attention`` (an instance of a `HRRAlibiReplacementFunction`
         function) is decorated with ``@policy_registry.register(GPT2Attention)``. Using the decorator
         this way instructs the ALiBi algorithms to apply surgery to any instance of `GPT2Attention`
         within the model using ``convert_gpt2_attention`` (the decorated function).
 
-        Note that ``convert_gpt2_attention`` follows the specific signature of an `AlibiReplacementFunction`.
+        Note that ``convert_gpt2_attention`` follows the specific signature of an `HRRAlibiReplacementFunction`.
         :meth:`policy_registry.register` will raise an exception if it is used to decorate a function that
         does not follow this signature. The requirements are:
         * The function takes 3 input arguments
@@ -65,13 +65,13 @@ class PolicyRegistry(Dict[Type[torch.nn.Module], AlibiReplacementFunction]):
 
         To better understand these requirements, it may be helpful to review composer's module
         surgery (:file:`composer/utils/module_surgery.py`) and the way ALiBi's implementation uses
-        `policy_registry` in :func:`composer.algorithms.alibi.apply_alibi`.
+        `policy_registry` in :func:`composer.algorithms.hrralibi.apply_hrralibi`.
         """
         if len(modules) == 0:
             raise ValueError('Registry decoration without any module class inputs has no effect.')
 
         def _validate_signature(func: Callable):
-            # Necessary to enforce that `func` has a valid signature (i.e. is a AlibiReplacementFunction)
+            # Necessary to enforce that `func` has a valid signature (i.e. is a HRRAlibiReplacementFunction)
             signature = inspect.signature(func)
             parameters = signature.parameters
             if len(parameters) != 3:
@@ -93,11 +93,11 @@ class PolicyRegistry(Dict[Type[torch.nn.Module], AlibiReplacementFunction]):
                 raise TypeError(f'Module {module.__name__} is not a subclass of `torch.nn.Module`.')
             if module in self:
                 raise ValueError(
-                    f'An AlibiReplacementFunction has already been registered for module {module.__name__}.')
+                    f'An HRRAlibiReplacementFunction has already been registered for module {module.__name__}.')
             self[module] = func
             return
 
-        def wrapper(func: AlibiReplacementFunction) -> AlibiReplacementFunction:
+        def wrapper(func: HRRAlibiReplacementFunction) -> HRRAlibiReplacementFunction:
             _validate_signature(func)
             for module in modules:
                 _register_module(module, func)

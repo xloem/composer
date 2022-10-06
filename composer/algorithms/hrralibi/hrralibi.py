@@ -1,7 +1,7 @@
 # Copyright 2022 MosaicML Composer authors
 # SPDX-License-Identifier: Apache-2.0
 
-"""Core ALiBi classes and functions."""
+"""Core HRR-ALiBi classes and functions."""
 
 from __future__ import annotations
 
@@ -17,18 +17,18 @@ from composer.utils import MissingConditionalImportError, module_surgery
 
 log = logging.getLogger(__name__)
 
-__all__ = ['Alibi', 'apply_alibi']
+__all__ = ['HRRAlibi', 'apply_hrralibi']
 
 
-def apply_alibi(
+def apply_hrralibi(
     model: torch.nn.Module,
     max_sequence_length: int,
     optimizers: Optional[Union[Optimizer, Sequence[Optimizer]]] = None,
 ) -> None:
     """Removes position embeddings and replaces the attention function and attention mask
-    as per :class:`.Alibi`. Note that the majority of the training speed-up from using ALiBi
+    as per :class:`.HRRAlibi`. Note that the majority of the training speed-up from using ALiBi
     comes from being able to train on shorter sequence lengths; this function does not scale
-    the training sequence length as :class:`.Alibi` does, so little speedup will be
+    the training sequence length as :class:`.HRRAlibi` does, so little speedup will be
     observed from using it alone. See the :doc:`Method Card </method_cards/alibi>` for
     more details. This function should be called after the model is instantiated and
     before training begins.
@@ -39,7 +39,7 @@ def apply_alibi(
 
         import composer.functional as cf
 
-        cf.apply_alibi(
+        cf.apply_hrralibi(
             model=model,
             max_sequence_length=512
         )
@@ -69,7 +69,7 @@ def apply_alibi(
             model parameters.
     """
     try:
-        from composer.algorithms.alibi.attention_surgery_functions import policy_registry
+        from composer.algorithms.hrralibi.attention_surgery_functions import policy_registry
     except ImportError as e:
         raise MissingConditionalImportError(extra_deps_group='nlp', conda_package='transformers') from e
 
@@ -109,7 +109,7 @@ def apply_alibi(
         log.info(f' {count} instances of ALiBi added')
 
 
-class Alibi(Algorithm):
+class HRRAlibi(Algorithm):
     """ALiBi (Attention with Linear Biases; `Press et al, 2021  <https://arxiv.org/abs/2108.12409>`_) dispenses with
     position embeddings and instead directly biases attention matrices such that nearby tokens attend to one another
     more strongly.
@@ -174,7 +174,7 @@ class Alibi(Algorithm):
 
     def apply(self, event: Event, state: State, logger: Logger) -> Optional[int]:
         if event == Event.INIT:
-            apply_alibi(
+            apply_hrralibi(
                 state.model,
                 optimizers=state.optimizers,
                 max_sequence_length=self.max_sequence_length,
