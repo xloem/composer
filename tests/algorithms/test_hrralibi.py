@@ -7,7 +7,7 @@ from operator import attrgetter
 import pytest
 import torch
 
-from composer.algorithms.alibi import Alibi, apply_alibi
+from composer.algorithms.hrralibi import HRRAlibi, apply_hrralibi
 from composer.core.event import Event
 from composer.loggers import Logger
 from tests.fixtures.synthetic_hf_state import make_dataset_configs, synthetic_hf_state_maker
@@ -82,7 +82,7 @@ def encountered_alibi_warning(caplog):
 def test_warning_is_triggered(caplog):
     """Test that Alibi triggers a warning when it has no effect."""
     pytest.importorskip('transformers')
-    apply_alibi(
+    apply_hrralibi(
         model=torch.nn.Sequential(torch.nn.Linear(20, 10), torch.nn.Linear(10, 5)),
         max_sequence_length=64,
     )
@@ -92,7 +92,7 @@ def test_warning_is_triggered(caplog):
 def test_registry(caplog):
     """Test that registry additions are used by Alibi."""
     pytest.importorskip('transformers')
-    from composer.algorithms.alibi.attention_surgery_functions import policy_registry
+    from composer.algorithms.hrralibi.attention_surgery_functions import policy_registry
 
     @policy_registry.register(torch.nn.Linear)
     def zero_linear_weights(  # pyright: reportUnusedFunction = none
@@ -103,7 +103,7 @@ def test_registry(caplog):
         setattr(module, 'weight', new_weight)
         return module
 
-    apply_alibi(
+    apply_hrralibi(
         model=torch.nn.Sequential(torch.nn.Linear(20, 10), torch.nn.Linear(10, 5)),
         max_sequence_length=64,
     )
@@ -112,7 +112,7 @@ def test_registry(caplog):
 
 
 @pytest.mark.parametrize('synthetic_state_family', ['bert', 'gpt2'])
-class TestAlibi:
+class TestHRRAlibi:
 
     def test_functional(self, synthetic_state_family: str, caplog):
         state, _, dataloader = make_synthetic_state(synthetic_state_family)
@@ -126,11 +126,11 @@ class TestAlibi:
         #### With default sequence length ####
 
         # Apply ALiBi using the functional
-        apply_alibi(
+        apply_hrralibi(
             model=state.model,
             max_sequence_length=max_sequence_length,
         )
-        assert not encountered_alibi_warning(caplog)  # This should not generate any warnings
+        assert not encountered_hrralibi_warning(caplog)  # This should not generate any warnings
 
         # Ensure that the position embeddings are properly shaped and zeroed
         check_position_embeddings(synthetic_state_family, state.model, max_sequence_length)
@@ -144,11 +144,11 @@ class TestAlibi:
         #### With double sequence length ####
 
         # Apply ALiBi using the functional
-        apply_alibi(
+        apply_hrralibi(
             model=state.model,
             max_sequence_length=2 * max_sequence_length,
         )
-        assert not encountered_alibi_warning(caplog)  # This should not generate any warnings
+        assert not encountered_hrralibi_warning(caplog)  # This should not generate any warnings
 
         # Ensure that the position embeddings are properly shaped and zeroed
         check_position_embeddings(synthetic_state_family, state.model, 2 * max_sequence_length)
@@ -173,19 +173,19 @@ class TestAlibi:
             raise NotImplementedError('Tests not implemented for synthetic_state_family=' + synthetic_state_family)
 
         # Synthetic dataset has a size of 2 batches per epoch (max duration = 1ep)
-        alibi = Alibi(
+        hrralibi = HRRAlibi(
             max_sequence_length=max_sequence_length,
             train_sequence_length_scaling=train_sequence_length_scaling,
         )
         # Apply ALiBi to the model
-        alibi.apply(Event.INIT, state, empty_logger)
+        hrralibi.apply(Event.INIT, state, empty_logger)
         assert not encountered_alibi_warning(caplog)  # This should not generate any warnings
 
         batch_before = next(iter(dataloader))
         state.batch = deepcopy(batch_before)
 
         # Apply any batch reshaping
-        alibi.apply(Event.AFTER_DATALOADER, state, empty_logger)
+        hrralibi.apply(Event.AFTER_DATALOADER, state, empty_logger)
 
         # Ensure proper batch reshaping
         check_batch_reshaping(batch_before, state.batch, int(train_sequence_length_scaling * max_sequence_length))
