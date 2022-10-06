@@ -80,14 +80,16 @@ def gpt2_attention_converter(module: torch.nn.Module, module_index: int, max_seq
 
 def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple[torch.Tensor, torch.Tensor]:
 
+    # TODO: verify dim=-2 is embedings, -1 is sequence, -3 is heads
 
-    # This is the first half of the hrr modification
+
+    # This is the binding portion of the hrr modification
     #   This is the old code, prior to the modification
     #     attn_weights = torch.matmul(query, key.transpose(-1, -2))
     #   End of old code
     # Pair keys and values using hrr binding
     attn_weights = hrr_binding(key, value, dim=-2)
-    # End first half of hrr modification
+    # End binding portion of hrr modification
 
     if self.scale_attn_weights:
         attn_weights = attn_weights / (float(value.size(-1))**0.5)
@@ -118,15 +120,32 @@ def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple
         attn_weights = torch.where(attention_mask == 0, attn_weights, 0)
         # End change to masking arithmetic
 
-    # ====> i'm here. beta is attn_weights.transpose(-1,-2). it hasn't been composed into beta_plus yet.
-    attn_weights = torch.nn.Softmax(dim=-1)(attn_weights)
+    # This is the second half of the hrr modification,
+    # The approach changes from "Attention is All You Need".
+    #   This is the old code, prior to the modification
+    #     attn_weights = torch.nn.Softmax(dim=-1)(attn_weights)
+    #     attn_weights = self.attn_dropout(attn_weights)
+    #
+    #     # Mask heads if we want to
+    #     if head_mask is not None:
+    #         attn_weights = attn_weights * head_mask
+    # 
+    #     attn_output = torch.matmul(attn_weights, value)
+    #   End of old code
     attn_weights = self.attn_dropout(attn_weights)
-
+    
     # Mask heads if we want to
     if head_mask is not None:
         attn_weights = attn_weights * head_mask
 
-    attn_output = torch.matmul(attn_weights, value)
+    # A composite representation of the terms is made by adding the sequence elements together.
+    attn_weights = attn_weights.sum(dim=-1)
+
+    # The unbinding operation is used to retrieve the value vectors from the query-associated keys.
+    attn_weights = hrr_approx_unbinding(attn_weights, query)
+    # ====> i'm at this point in the file
+    attn_weights = torch.nn.functional.softmax(
+    # End second half of hrr modification
 
     return attn_output, attn_weights
 
