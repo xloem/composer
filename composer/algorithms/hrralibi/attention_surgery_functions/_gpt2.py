@@ -13,6 +13,7 @@ from composer.algorithms.alibi.attention_surgery_functions.utils import (policy_
                                                                          zero_and_freeze_expand_position_embeddings)
 
 from torch.fft import fft, ifft, fft2, ifft2
+from torch.linalg import vector_norm as norm
 
 def hrr_approx_inverse(x, dim=-1):
     return torch.roll(torch.flip(x, dims=(dim,)), 1, dims=dim)
@@ -80,7 +81,10 @@ def gpt2_attention_converter(module: torch.nn.Module, module_index: int, max_seq
 
 def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple[torch.Tensor, torch.Tensor]:
 
-    # TODO: verify dim=-2 is embedings, -1 is sequence, -3 is heads
+    # TODO: verify dim=-2 is embeddings, -1 is sequence, -3 is heads
+    # axis labels T and H are from the paper
+    T = -1
+    H = -2
 
 
     # This is the binding portion of the hrr modification
@@ -88,7 +92,7 @@ def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple
     #     attn_weights = torch.matmul(query, key.transpose(-1, -2))
     #   End of old code
     # Pair keys and values using hrr binding
-    attn_weights = hrr_binding(key, value, dim=-2)
+    attn_weights = hrr_binding(key, value, dim=H)
     # End binding portion of hrr modification
 
     if self.scale_attn_weights:
@@ -139,13 +143,20 @@ def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple
         attn_weights = attn_weights * head_mask
 
     # A composite representation of the terms is made by adding the sequence elements together.
-    attn_weights = attn_weights.sum(dim=-1)
+    attn_weights = attn_weights.sum(dim=T)
 
     # The unbinding operation is used to retrieve the value vectors from the query-associated keys.
-    attn_weights = hrr_approx_unbinding(attn_weights, query)
-    # ====> i'm at this point in the file
-    attn_weights = torch.nn.functional.softmax(
+    attn_weights = hrr_approx_unbinding(attn_weights, query, dim=H)
+    # The weight values are the softmax of the cosines between the embedding vectors.
+    attn_weights = torch.nn.functional.softmax(torch.cosine_similarity(attn_weights, value, dim=H))
+    # The final attention is the product of the weights and values.
+    attn_output = attn_wieghts * value
     # End second half of hrr modification
+
+    # ====> i've gone through this function once and attempted to convert it.
+    #       the second half may be unneccessarily disorganised, as i saved when i got here.
+    #       i have not checked for typos or parse failures or anything or tried running it.
+    #       some of the utility functions at the top could be removed.
 
     return attn_output, attn_weights
 
