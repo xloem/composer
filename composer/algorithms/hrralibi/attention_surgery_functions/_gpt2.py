@@ -145,7 +145,7 @@ def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple
     # Retrieve the value vectors from the query-associated keys by unbinding.
     attn_weights = hrr_approx_unbinding(attn_weights, query, dim=H)
     # Calculate the final weights as the softmax of the cosine similarity.
-    attn_weights = torch.nn.functional.softmax(torch.cosine_similarity(attn_weights, value, dim=H))
+    attn_weights = torch.nn.functional.softmax(torch.cosine_similarity(attn_weights, value, dim=H), dim=-1)
     # Calculate the final output as the product with the original values.
     attn_output = attn_weights[...,None] * value
     # End second half of hrr modification
