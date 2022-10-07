@@ -81,10 +81,10 @@ def gpt2_attention_converter(module: torch.nn.Module, module_index: int, max_seq
 
 def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple[torch.Tensor, torch.Tensor]:
 
-    # TODO: verify dim=-2 is embeddings, -1 is sequence, -3 is heads
     # axis labels T and H are from the paper
-    T = -1
-    H = -2
+    T = -2 # sequence
+    H = -1 # embeddings
+    # -3 is heads
 
 
     # This is the first half of the hrr modification
