@@ -86,7 +86,6 @@ def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple
     H = -1 # embeddings
     # -3 is heads
 
-
     # This is the first half of the hrr modification
     #   This is the old code, frm "attention is all you need"
     #     attn_weights = torch.matmul(query, key.transpose(-1, -2))
@@ -106,14 +105,13 @@ def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple
     attn_weights = attn_weights + alibi
     # End alibi modification
 
-    if not self.is_cross_attention:
-        # if only "normal" attention layer implements causal mask
-        query_length, key_length = query.size(-2), key.size(-2)
-
-        # This is a change to the masking arithmetic for hrr
-        causal_mask = self.bias[:, :, key_length - query_length:key_length, :key_length]
-        attn_weights = torch.where(causal_mask, attn_weights, 0)
-        # End change to masking arithmetic
+    # This old code was here but its effect is replaced in the HRR code.
+    # if not self.is_cross_attention:
+    #     # if only "normal" attention layer implements causal mask
+    #     query_length, key_length = query.size(-2), key.size(-2)
+    #     causal_mask = self.bias[:, :, key_length - query_length:key_length, :key_length].bool()
+    #     attn_weights = torch.where(causal_mask, attn_weights, self.masked_bias.to(attn_weights.dtype))
+    # End of old code
 
 
     if attention_mask is not None:
@@ -139,13 +137,17 @@ def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple
     #     attn_output = torch.matmul(attn_weights, value)
     #   End of old code
     # Add the sequence elements to produce a composite representation of the terms.
-    attn_weights = attn_weights.sum(dim=T)
+    if not self.is_cross_attention:
+        # Only "normal" attention layer; emulate a causal mask
+        attn_weights = attn_weights.cumsum(dim=T)
+    else:
+        attn_weights = attn_weights.sum(dim=T)
     # Retrieve the value vectors from the query-associated keys by unbinding.
     attn_weights = hrr_approx_unbinding(attn_weights, query, dim=H)
     # Calculate the final weights as the softmax of the cosine similarity.
     attn_weights = torch.nn.functional.softmax(torch.cosine_similarity(attn_weights, value, dim=H))
     # Calculate the final output as the product with the original values.
-    attn_output = attn_weights * value
+    attn_output = attn_weights[...,None] * value
     # End second half of hrr modification
 
     # ====> i've gone through this function once and attempted to convert it.

@@ -11,11 +11,16 @@ class train_state:
         n_positions = 1024,
         vocab_size = 256
     ))
-    optimizers = [torch.optim.lr_scheduler.ExponentialLR(
-        optimizer = torch.optim.Adam(model.parameters(), lr=1e-3),
-        gamma = 0.9,
-        verbose = True
-    )]
+    optimizers = [
+        torch.optim.Adam(model.parameters(), lr=1e-3),
+    ]
+    schedulers = [
+        torch.optim.lr_scheduler.ExponentialLR(
+            optimizer = optimizers[0],
+            gamma = 0.9,
+            verbose = True
+        ),
+    ]
     batch = None
 
 # for alibi:
@@ -59,10 +64,17 @@ def make_batch(length = hrr.max_sequence_length, size = 1):
 
 train_state.model.train()
 for epoch in range(65):
-    train_state.model.zero_grad()
-    train_state.batch = make_batch(size=1)
-    hrr.apply(composer.core.Event.AFTER_DATALOADER, train_state, None)
-    train_state.outputs = train_state.model(**train_state.batch)
-    train_state.outputs.loss.backward()
-    for optimizer in train_state.optimizers:
-        optimizer.step()
+    total_loss = 0
+    num_batches = 16
+    for batch in range(num_batches):
+        train_state.model.zero_grad()
+        train_state.batch = make_batch(size=1)
+        hrr.apply(composer.core.Event.AFTER_DATALOADER, train_state, None)
+        train_state.outputs = train_state.model(**train_state.batch)
+        train_state.outputs.loss.backward()
+        for optimizer in train_state.optimizers:
+            optimizer.step()
+        total_loss += train_state.outputs.loss.detach()
+    print('loss', total_loss / num_batches)
+    for scheduler in train_state.schedulers:
+        scheduler.step()
