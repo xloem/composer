@@ -180,7 +180,7 @@ def forward(
     # Add the sequence elements to produce a composite representation of the terms.
     attention_scores = attention_scores.sum(dim=T)
     # Retrieve the value vectors from the query-associated keys by unbinding.
-    attention_scores = hrr_approx_unbinding(attention_scores, query_layer, dim=H)
+    attention_scores = hrr_exact_unbinding(attention_scores, query_layer, dim=H)
     # Calculate the final weights as the softmax of the cosine similarity.
     attention_probs = torch.nn.functional.softmax(torch.cosine_similarity(attention_scores, value_layer, dim=H))
     # Calculate the final output as the product with the original values.
