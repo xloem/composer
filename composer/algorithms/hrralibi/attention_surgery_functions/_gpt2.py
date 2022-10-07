@@ -145,7 +145,7 @@ def _attn(self, query, key, value, attention_mask=None, head_mask=None) -> Tuple
     # Calculate the final weights as the softmax of the cosine similarity.
     attn_weights = torch.nn.functional.softmax(torch.cosine_similarity(attn_weights, value, dim=H))
     # Calculate the final output as the product with the original values.
-    attn_output = attn_wieghts * value
+    attn_output = attn_weights * value
     # End second half of hrr modification
 
     # ====> i've gone through this function once and attempted to convert it.
